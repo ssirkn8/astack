@@ -1,0 +1,56 @@
+set shell := ["bash", "-cu"]
+
+check:
+	uv lock --check
+	uv sync --locked
+	uv run --locked python .astack/validation/validate_test_split.py --allow-empty-integration
+	uv run --locked ruff format --check .
+	uv run --locked ruff check .
+	uv run --locked mypy .
+	uv run --locked pytest -m "not integration" -n logical
+
+integration:
+	uv run --locked python .astack/validation/validate_test_split.py --allow-empty-integration
+	uv run --locked python .astack/validation/run_integration.py
+
+test-split:
+	uv run --locked python .astack/validation/validate_test_split.py --allow-empty-integration
+
+typecheck:
+	uv run --locked mypy .
+
+test:
+	uv run --locked pytest
+
+format:
+	uv run --locked ruff format .
+	uv run --locked ruff check --fix .
+
+audit-json:
+	uv run --locked python .astack/workflow.py audit --format json --run-tools
+
+verify:
+	uv run --locked python .astack/workflow.py validate verify
+
+release:
+	uv run --locked python .astack/workflow.py validate release
+
+# `just ship-ready <analysis>` also checks that registry analysis exists and is confirmed.
+ship-ready analysis="":
+	uv run --locked python .astack/workflow.py audit --format text --run-tools --strict --analysis {{quote(analysis)}}
+
+ci-check:
+	uv run --locked python .astack/workflow.py audit --format text --run-tools --strict --ci
+
+reproduce *args:
+	uv run --locked python .astack/workflow.py reproduce {{args}}
+
+acquire:
+	uv run --locked python .astack/workflow.py acquire
+
+# Check that report figures and cited numbers point at real evidence. Default: every report.
+report-check *reports:
+	uv run --locked python .astack/workflow.py report-check {{reports}}
+
+outputs:
+	uv run --locked python .astack/workflow.py outputs

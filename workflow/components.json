@@ -1,0 +1,38 @@
+{
+  "schema_version": 1,
+  "components": [
+    {"id": "command.audit", "kind": "opencode", "source": "commands/ds-repo-audit.md", "target": ".opencode/commands/ds-repo-audit.md"},
+    {"id": "command.output-contract", "kind": "opencode", "source": "commands/ds-output-contract.md", "target": ".opencode/commands/ds-output-contract.md"},
+    {"id": "command.publish-public", "kind": "opencode", "source": "commands/publish-public.md", "target": ".opencode/commands/publish-public.md"},
+    {"id": "command.report", "kind": "opencode", "source": "commands/ds-report.md", "target": ".opencode/commands/ds-report.md"},
+    {"id": "adapter.pi-settings", "kind": "pi", "source": "settings.json", "target": ".pi/settings.json"},
+    {"id": "skill.project-policy", "kind": "opencode", "source": "skills/project-policy/SKILL.md", "target": ".opencode/skills/project-policy/SKILL.md"},
+    {"id": "skill.human-decisions", "kind": "opencode", "source": "skills/human-decisions/SKILL.md", "target": ".opencode/skills/human-decisions/SKILL.md"},
+    {"id": "skill.output-contract", "kind": "opencode", "source": "skills/ds-output-contract/SKILL.md", "target": ".opencode/skills/ds-output-contract/SKILL.md"},
+    {"id": "skill.publish-public", "kind": "opencode", "source": "skills/publish-public/SKILL.md", "target": ".opencode/skills/publish-public/SKILL.md"},
+    {"id": "skill.repo-audit", "kind": "opencode", "source": "skills/ds-repo-audit/SKILL.md", "target": ".opencode/skills/ds-repo-audit/SKILL.md"},
+    {"id": "skill.report-generation", "kind": "opencode", "source": "skills/ds-report-generation/SKILL.md", "target": ".opencode/skills/ds-report-generation/SKILL.md"},
+    {"id": "skill.report-template", "kind": "opencode", "source": "skills/ds-report-generation/report-template.md", "target": ".opencode/skills/ds-report-generation/report-template.md"},
+    {"id": "skill.research-visuals", "kind": "opencode", "source": "skills/research-visuals/SKILL.md", "target": ".opencode/skills/research-visuals/SKILL.md"},
+    {"id": "skill.research-visuals-style", "kind": "opencode", "source": "skills/research-visuals/journal-serif.mplstyle", "target": ".opencode/skills/research-visuals/journal-serif.mplstyle"},
+    {"id": "skill.pr-visuals", "kind": "opencode", "source": "skills/pr-visuals/SKILL.md", "target": ".opencode/skills/pr-visuals/SKILL.md"},
+    {"id": "skill.pr-visuals-tool", "kind": "opencode", "source": "skills/pr-visuals/pr_visuals.py", "target": ".opencode/skills/pr-visuals/pr_visuals.py"},
+    {"id": "skill.source-comments", "kind": "opencode", "source": "skills/source-comments/SKILL.md", "target": ".opencode/skills/source-comments/SKILL.md"},
+    {"id": "skill.pr-review-pass", "kind": "opencode", "source": "skills/pr-review-pass/SKILL.md", "target": ".opencode/skills/pr-review-pass/SKILL.md"},
+    {"id": "runtime.workflow", "kind": "workflow", "source": "project_tool_bundle.py", "target": ".astack/workflow.py"},
+    {"id": "runtime.validation-session", "kind": "workflow", "source": "validation_session.py", "target": ".astack/validation/validation_session.py"},
+    {"id": "runtime.project-policy", "kind": "package", "source": "project_policy.py", "target": ".astack/project_policy.py"},
+    {"id": "runtime.release-upgrade", "kind": "package", "source": "release_upgrade.py", "target": ".astack/release_upgrade.py"},
+    {"id": "command.upgrade", "kind": "opencode", "source": "commands/astack-upgrade.md", "target": ".opencode/commands/astack-upgrade.md"},
+    {"id": "skill.workflow-upgrade", "kind": "opencode", "source": "skills/astack-upgrade/SKILL.md", "target": ".opencode/skills/astack-upgrade/SKILL.md"},
+    {"id": "runtime.git-state", "kind": "package", "source": "git_state.py", "target": ".astack/git_state.py"},
+    {"id": "runtime.output-contract", "kind": "package", "source": "output_contract.py", "target": ".astack/output_contract.py"},
+    {"id": "runtime.diagnostics", "kind": "package", "source": "diagnostics.py", "target": ".astack/diagnostics.py"},
+    {"id": "runtime.components", "kind": "workflow", "source": "components.json", "target": ".astack/components.json"}
+  ],
+  "upstream_skills": "integrations/t3/upstream.lock.json",
+  "generated_discovery": {
+    "codex": ".agents/skills",
+    "claude-code": ".claude/skills"
+  }
+}

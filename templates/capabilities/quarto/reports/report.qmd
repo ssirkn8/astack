@@ -1,0 +1,41 @@
+---
+title: PROJECT_TITLE_YAML
+date: today
+format:
+  html:
+    toc: true
+    number-sections: true
+---
+
+# Introduction
+
+One-line project description.
+
+# Data Sources
+
+Data provenance is maintained in `data/sources.yml`.
+
+# Methodology
+
+Document the study design, unit of analysis, transformations, validation strategy, and
+applicable dependence and validation assumptions before reporting results.
+
+# QA and Validation
+
+Reference durable QA and run evidence from `evidence/<component>/`, figures from
+`reports/figures/<component>/`, tables from `reports/tables/<component>/`, and generated machine
+outputs from `artifacts/<component>/`. Passing software tests alone is not evidence that the
+analysis is scientifically valid.
+
+# Results
+
+No results have been generated yet. Replace this statement only with claims traceable to
+reproducible project outputs.
+
+# Discussion
+
+Interpret results with uncertainty, sensitivity, limitations, and intended use.
+
+# References
+
+Add citations used by the analysis and align data citations with `data/sources.yml`.

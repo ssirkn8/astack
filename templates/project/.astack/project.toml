@@ -1,0 +1,76 @@
+schema_version = 1
+profile = "data-science"
+capabilities = ["scientific-review", "scientific-validation"]
+# Tools selected by `astack new`: dvc (default), marimo (required for data science), quarto.
+tools = TOOLS_TOML
+
+[analysis]
+stage = "exploratory"
+
+# Material work may opt in with shared definitions and separate execution evidence.
+# See docs/scientific-outputs.md.
+# [scientific_outputs]
+# path = "docs/scientific-outputs.yml"
+# evidence_path = "evidence/scientific-outputs.yml"
+
+# CHECK runs `just check`. Add representative fixture-backed commands for VERIFY and the
+# full material reconstruction for RELEASE when they apply. Declared VERIFY also runs with
+# `validate check` and strict ship-ready. Undeclared, CHECK reports it as not-run, which is
+# never a pass, and strict ship-ready blocks once analysis.stage is material.
+[validation]
+check = [["just", "check"]]
+# verify = [["uv", "run", "--locked", "pytest", "-m", "verify"]]
+# release = [["just", "reproduce", "--verify"], ["uv", "run", "--locked", "python", ".astack/workflow.py", "audit", "--format", "text", "--run-tools", "--strict"], ["uv", "run", "--locked", "python", ".astack/workflow.py", "review-status", "--require-reviewed"]]
+
+[data]
+layout = "standard"
+share_raw = true
+# A source may stay outside data/raw for size only above this total, in GB (see data/README.md).
+snapshot_limit_gb = 5
+
+# Optional committed-history privacy policy. Paths are project-relative. Private roots match
+# descendants, while safe paths are exact exceptions only and never permit a directory prefix.
+# [privacy]
+# private_history_paths = ["client-private", "notes/internal.txt"]
+# private_history_safe_paths = ["client-private/README.md"]
+
+[outputs]
+layout = "component"
+components = []
+
+# Material projects must declare a reproduction engine and component.
+# DVC projects use engine = "dvc" with a project-owned dvc.yaml pipeline.
+# Legacy command projects use engine = "command" and a command array.
+# [reproduction]
+# engine = "dvc"
+# component = "analysis"
+# targets = ["prepare", "analyze"]
+# command = ["python", "scripts/pipeline.py"]
+# outputs = ["data/processed/analysis/result.parquet", "reports/figures/analysis/fig1.png"]
+# Scratch files a toolchain leaves behind, which the per-stage check and reproduce ignore:
+# check_ignore = [".Rhistory", "Rplots.pdf"]
+# Optional project-defined comparison for outputs that are not byte-reproducible:
+# [reproduction.tolerance]
+# "data/processed/analysis/result.parquet" = ["python", "scripts/compare_result.py"]
+
+# Optional journal/archive handoff. See docs/publication/README.md. Never invent a DOI.
+# [publication]
+# license = "LICENSE"
+# citation = "CITATION.cff"
+# data_availability = "docs/publication/data-availability.md"
+# code_availability = "docs/publication/code-availability.md"
+
+# Public export allowlist used by `python .astack/workflow.py export-public --out <dir>`.
+# Exact tracked paths or "dir/**". Data and derived outputs also need `public-export` in
+# data/sources.yml allowed_outputs. `{out}` in a scan command is the export directory.
+# [public_export]
+# include = ["README.md", "LICENSE", "CITATION.cff", "pyproject.toml", "uv.lock", "src/**"]
+# exclude = []
+# scan = [["gitleaks", "dir", "{out}"]]
+
+# Acquisition is explicit and never runs as part of reproduction. The command gets an empty
+# $ASTACK_ACQUISITION_DIR to write new inputs into, and astack adds them to data/raw without
+# replacing an existing path. It keeps no copy of data/raw, so raw must be read-only first
+# (`chmod -R a-w data/raw`).
+# [acquisition]
+# command = ["python", "scripts/acquire.py"]

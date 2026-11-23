@@ -1,0 +1,112 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "astack"
+version = "0.1.0"
+description = "Shared engineering workflow for software and reproducible data science projects"
+readme = "README.md"
+license = {file = "LICENSE"}
+requires-python = ">=3.12"
+dependencies = ["pyyaml>=6.0"]
+
+[project.scripts]
+astack = "astack.cli:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/astack"]
+
+[tool.hatch.build.targets.wheel.force-include]
+"templates" = "astack/assets/templates"
+".opencode/commands" = "astack/assets/opencode/commands"
+".opencode/skills" = "astack/assets/opencode/skills"
+".pi/settings.json" = "astack/assets/pi/settings.json"
+"workflow/project_tool_bundle.py" = "astack/assets/workflow/project_tool_bundle.py"
+"workflow/validation_session.py" = "astack/assets/workflow/validation_session.py"
+"workflow/components.json" = "astack/assets/workflow/components.json"
+".agents/skills/babysit-pr" = "astack/assets/.agents/skills/babysit-pr"
+".agents/skills/council" = "astack/assets/.agents/skills/council"
+".agents/skills/file-pr" = "astack/assets/.agents/skills/file-pr"
+".agents/skills/full-send" = "astack/assets/.agents/skills/full-send"
+".agents/skills/full-stop" = "astack/assets/.agents/skills/full-stop"
+".agents/skills/grill-me" = "astack/assets/.agents/skills/grill-me"
+".agents/skills/grilling" = "astack/assets/.agents/skills/grilling"
+".agents/skills/leaving-pr-comments" = "astack/assets/.agents/skills/leaving-pr-comments"
+".agents/skills/modernize" = "astack/assets/.agents/skills/modernize"
+".agents/skills/sol-loop" = "astack/assets/.agents/skills/sol-loop"
+".agents/skills/takeover" = "astack/assets/.agents/skills/takeover"
+".agents/skills/to-spec" = "astack/assets/.agents/skills/to-spec"
+".agents/skills/to-tickets" = "astack/assets/.agents/skills/to-tickets"
+"integrations/t3/upstream.lock.json" = "astack/assets/integrations/t3/upstream.lock.json"
+"integrations/t3/licenses" = "astack/assets/integrations/t3/licenses"
+"integrations/t3/PROJECT-GUIDE.md" = "astack/assets/integrations/t3/PROJECT-GUIDE.md"
+
+[tool.hatch.build]
+exclude = [
+  "**/.DS_Store",
+  "**/.mypy_cache/**",
+  "**/node_modules/**",
+  "**/.opencode/.gitignore",
+  "**/.opencode/bun.lock",
+  "**/.opencode/package-lock.json",
+  "**/.opencode/package.json",
+  "**/.pytest_cache/**",
+  "**/.ruff_cache/**",
+  "**/__pycache__/**",
+  "**/*.pyc",
+]
+
+[dependency-groups]
+dev = [
+  "markdown-it-py>=3.0",
+  "pytest>=8.0",
+  "pytest-xdist>=3.6",
+  "ruff>=0.8",
+  "mypy>=1.10",
+  "pre-commit>=4.0",
+  "types-PyYAML>=6.0",
+  "marimo>=0.20,<1",
+  "anywidget>=0.9,<1",
+  "pillow>=10",
+  "pyarrow>=15",
+]
+
+[tool.ruff]
+line-length = 100
+extend-exclude = ["tests/fixtures"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+norecursedirs = ["tests/fixtures"]
+markers = [
+  "integration: tests that exercise linked worktrees or other integration-heavy behavior",
+]
+
+[tool.mypy]
+python_version = "3.12"
+warn_return_any = true
+warn_unused_configs = true
+check_untyped_defs = true
+disallow_untyped_defs = false
+exclude = [
+  "^\\.venv/",
+  "^\\.marimo/",
+  "^\\.quarto/",
+  "^\\.dvc/",
+  "^data/",
+  "^notebooks/",
+  "^reports/",
+  "^tests/fixtures/",
+  "^templates/capabilities/marimo/notebooks/",
+  "^templates/project/notebooks/",
+  "^templates/project/tests/",
+]
+
+[[tool.mypy.overrides]]
+# Optional readers for output previews. They may be absent, and some ship no types.
+module = ["numpy", "pyarrow", "pyarrow.*", "rasterio", "xarray"]
+ignore_missing_imports = true

@@ -1,0 +1,8 @@
+dvc-status:
+	uv run --locked python .astack/workflow.py dvc-status
+
+dvc-cache-status:
+	uv run --locked python .astack/workflow.py dvc-cache status
+
+dvc-cache-gc:
+	uv run --locked python .astack/workflow.py dvc-cache gc

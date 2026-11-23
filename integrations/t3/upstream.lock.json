@@ -1,0 +1,178 @@
+{
+  "schema_version": 1,
+  "sources": [
+    {
+      "repository": "https://github.com/t3dotgg/tstack",
+      "commit": "1085050f3baed1ac724caa4a8166145fb2ac88af",
+      "skills": [
+        "babysit-pr",
+        "council",
+        "file-pr",
+        "full-send",
+        "full-stop",
+        "leaving-pr-comments",
+        "modernize",
+        "sol-loop",
+        "takeover"
+      ],
+      "files": [
+        {
+          "path": ".agents/skills/babysit-pr/SKILL.md",
+          "sha256": "fbe43ba3ab76a466a88ef8b46dca1b41fb8101347d24a396903849865173a6ac",
+          "executable": false,
+          "upstream_path": "skills/babysit-pr/SKILL.md"
+        },
+        {
+          "path": ".agents/skills/babysit-pr/scripts/pr-wait",
+          "sha256": "90393f85b95b78bff1b039744bdfb09dc88ff2b430e1c3df687ee6f449c97214",
+          "executable": true,
+          "upstream_path": "skills/babysit-pr/scripts/pr-wait"
+        },
+        {
+          "path": ".agents/skills/council/SKILL.md",
+          "sha256": "598fb2c7cdd48ddd9643cb22999e1b624c357aa6579aa0af0e7268ae16a8a164",
+          "executable": false,
+          "upstream_path": "skills/council/SKILL.md"
+        },
+        {
+          "path": ".agents/skills/file-pr/SKILL.md",
+          "sha256": "174a7ae52e3b9d17f2bd0eaf0a11a89d744d1249164ecbdb0e642359eee75b1b",
+          "executable": false,
+          "upstream_path": "skills/file-pr/SKILL.md"
+        },
+        {
+          "path": ".agents/skills/full-send/SKILL.md",
+          "sha256": "ba585e47cd901506b0e2de13025b0e39bc02462c136cf27491ad3efbdfe66020",
+          "executable": false,
+          "upstream_path": "skills/full-send/SKILL.md"
+        },
+        {
+          "path": ".agents/skills/full-send/agents/openai.yaml",
+          "sha256": "8a1e8ce04a774a8a2e469cecf5e45a9cec4d3438b4c587cf166c2f78206390d2",
+          "executable": false,
+          "upstream_path": "skills/full-send/agents/openai.yaml"
+        },
+        {
+          "path": ".agents/skills/full-stop/SKILL.md",
+          "sha256": "091dcabfcba73e009ddb8e32c498a993a6bb60f8c223d3e21e917f4e52ab9939",
+          "executable": false,
+          "upstream_path": "skills/full-stop/SKILL.md"
+        },
+        {
+          "path": ".agents/skills/full-stop/agents/openai.yaml",
+          "sha256": "6029e872a883aa06aad3426ab58289df016e4b0d23485719c71152603fec7d35",
+          "executable": false,
+          "upstream_path": "skills/full-stop/agents/openai.yaml"
+        },
+        {
+          "path": ".agents/skills/leaving-pr-comments/SKILL.md",
+          "sha256": "1d110343022d0514c101dd942286cce10d6b9f5bd5b899f5a0530620d34cd295",
+          "executable": false,
+          "upstream_path": "skills/leaving-pr-comments/SKILL.md"
+        },
+        {
+          "path": ".agents/skills/leaving-pr-comments/agents/openai.yaml",
+          "sha256": "f89fa0d9ae1c3e973b3e9ecb50549faee62fd1a0e59973bade68802c74183fdb",
+          "executable": false,
+          "upstream_path": "skills/leaving-pr-comments/agents/openai.yaml"
+        },
+        {
+          "path": ".agents/skills/modernize/SKILL.md",
+          "sha256": "6172d774c46f535367086da90db1b0aaaaac969ed05ff040444f9afa9a6b1552",
+          "executable": false,
+          "upstream_path": "skills/modernize/SKILL.md"
+        },
+        {
+          "path": ".agents/skills/modernize/agents/openai.yaml",
+          "sha256": "6675e91e10f2b264fe1a027072f6d9f46299f781011e248a5ba075fc1f764e09",
+          "executable": false,
+          "upstream_path": "skills/modernize/agents/openai.yaml"
+        },
+        {
+          "path": ".agents/skills/sol-loop/SKILL.md",
+          "sha256": "1db1eb4c4a156ee666070e9a12623d520cd1bd9b19c3fc21003fe5a440ba0b10",
+          "executable": false,
+          "upstream_path": "skills/sol-loop/SKILL.md"
+        },
+        {
+          "path": ".agents/skills/takeover/SKILL.md",
+          "sha256": "9f00a7c67bf82603af2e80f56e9ce63f1516a1b4339365b79cf786d9d9055465",
+          "executable": false,
+          "upstream_path": "skills/takeover/SKILL.md"
+        },
+        {
+          "path": "integrations/t3/licenses/tstack/LICENSE",
+          "sha256": "8095f9a9f97d074131f6a2ce09b952d12c18b36f09f4e5df0517c4e64e82c851",
+          "executable": false,
+          "upstream_path": "LICENSE"
+        }
+      ]
+    },
+    {
+      "repository": "https://github.com/mattpocock/skills",
+      "commit": "4ae2317ddb22b046e26455e4f9c9b3aaaf62212d",
+      "skills": [
+        "grill-me",
+        "grilling",
+        "to-spec",
+        "to-tickets"
+      ],
+      "files": [
+        {
+          "path": ".agents/skills/grill-me/SKILL.md",
+          "sha256": "caaf8b8de1684f96e26b28f3c29189db5c89cce4b73e1c93d86164f66ef88637",
+          "executable": false,
+          "upstream_path": "skills/productivity/grill-me/SKILL.md"
+        },
+        {
+          "path": ".agents/skills/grill-me/agents/openai.yaml",
+          "sha256": "c061e39c3e0f9d865fb1b97556d485704af2a8a58f4b8221a8917a5c2074a32b",
+          "executable": false,
+          "upstream_path": "skills/productivity/grill-me/agents/openai.yaml"
+        },
+        {
+          "path": ".agents/skills/grilling/SKILL.md",
+          "sha256": "a146842ed93ca43d833550fa9adf02e58cb63c83fea9d4b4522995b82242d4e2",
+          "executable": false,
+          "upstream_path": "skills/productivity/grilling/SKILL.md"
+        },
+        {
+          "path": ".agents/skills/grilling/agents/openai.yaml",
+          "sha256": "1411d7df7d99b7e621a1ff8283c8133cc2464be63d064e52d8ce169c6800ee9b",
+          "executable": false,
+          "upstream_path": "skills/productivity/grilling/agents/openai.yaml"
+        },
+        {
+          "path": ".agents/skills/to-spec/SKILL.md",
+          "sha256": "43ad9cf318e5e7d3d1fa360253a37021796dc87a0c2e595ad262661a10f85088",
+          "executable": false,
+          "upstream_path": "skills/engineering/to-spec/SKILL.md"
+        },
+        {
+          "path": ".agents/skills/to-spec/agents/openai.yaml",
+          "sha256": "1c5b4d1e3d8e52287ef19cc2742fdbbfae1914ac75d33af3e4c8174f08cc55bb",
+          "executable": false,
+          "upstream_path": "skills/engineering/to-spec/agents/openai.yaml"
+        },
+        {
+          "path": ".agents/skills/to-tickets/SKILL.md",
+          "sha256": "56ec23c5b2782785d4e65bff9e315b6d3aeb4ef977c174a219e99489fada1995",
+          "executable": false,
+          "upstream_path": "skills/engineering/to-tickets/SKILL.md"
+        },
+        {
+          "path": ".agents/skills/to-tickets/agents/openai.yaml",
+          "sha256": "21bc6215fffcd7614e9f772bb1760e87cc5fc7dcc707e7d282bc9414267a6090",
+          "executable": false,
+          "upstream_path": "skills/engineering/to-tickets/agents/openai.yaml"
+        },
+        {
+          "path": "integrations/t3/licenses/matt-pocock/LICENSE",
+          "sha256": "0e7ac423bf2c6e223b7c5b156f8cf72da49d748e56a1641402c31f22ad07dbb5",
+          "executable": false,
+          "upstream_path": "LICENSE"
+        }
+      ]
+    }
+  ]
+}

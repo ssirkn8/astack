@@ -1,0 +1,43 @@
+[build-system]
+requires = ["uv_build>=0.9.9,<0.10.0"]
+build-backend = "uv_build"
+
+[project]
+name = "ds-project"
+version = "0.1.0"
+description = "PROJECT_DESCRIPTION_TOML"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = []
+
+[dependency-groups]
+dev = [
+  "markdown-it-py>=3.0",
+  "mypy>=1.10",
+  "pre-commit>=4.0",
+  "pytest>=8.0",
+  "pytest-xdist>=3.6",
+  "pyyaml>=6.0",
+  "ruff>=0.8",
+  "types-PyYAML>=6.0",
+  # capability-dependencies
+]
+
+[tool.ruff]
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = [
+  "integration: tests that exercise integration-heavy behavior",
+]
+
+[tool.mypy]
+python_version = "3.12"
+warn_return_any = true
+warn_unused_configs = true
+check_untyped_defs = true
+exclude = ["^\\.venv/", "^data/", "^notebooks/", "^reports/"]

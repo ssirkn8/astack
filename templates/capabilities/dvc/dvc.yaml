@@ -1,0 +1,25 @@
+# DVC labels each output current or outdated from the checksums of its stage's deps.
+# A dep left out here cannot make an output outdated, so keep deps coarse: the whole package,
+# the stage's script, its parameters and uv.lock. Narrow them only on purpose.
+# `cache: false` keeps outputs out of the DVC cache. Pipelines here never store data.
+# Declare every file a stage writes. A stage that reads an undeclared file under evidence/,
+# artifacts/, reports/, data/interim/ or data/processed/ is labeled unknown. `just reproduce` runs
+# each stage and flags files it reads or writes that this file does not declare. While a stage
+# runs, derived files it does not declare are unreadable, so any library reading one fails.
+# Run `just reproduce` to run stale stages and `just outputs` to see each output's label.
+stages: {}
+# stages:
+#   analyze:
+#     cmd: uv run --locked python scripts/analyze.py
+#     deps:
+#       - src/ds_project
+#       - scripts/analyze.py
+#       - data/raw
+#       - uv.lock
+#     params:
+#       - params.yaml:
+#     outs:
+#       - data/processed/analysis/result.parquet:
+#           cache: false
+#       - reports/figures/analysis/fig1.png:
+#           cache: false

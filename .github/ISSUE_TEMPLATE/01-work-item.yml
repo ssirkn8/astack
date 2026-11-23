@@ -1,0 +1,30 @@
+name: Work item
+description: Define one focused unit of repository work
+title: "[Work]: "
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: What failure, need, or research question should this work address?
+    validations:
+      required: true
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Acceptance criteria
+      description: List observable outcomes that will make this work complete.
+    validations:
+      required: true
+  - type: textarea
+    id: validation
+    attributes:
+      label: Validation
+      description: How should the result be checked, including scientific evidence when applicable?
+    validations:
+      required: true
+  - type: textarea
+    id: boundaries
+    attributes:
+      label: Boundaries
+      description: Note excluded work and any privacy, licensing, data, or release constraints.

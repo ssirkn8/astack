@@ -1,0 +1,42 @@
+name: checks
+
+on:
+  pull_request:
+    types: [opened, reopened, synchronize, edited, ready_for_review]
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          fetch-depth: 0
+      - uses: astral-sh/setup-uv@d0cc045d04ccac9d8b7881df0226f9e82c39688e # v6
+        with:
+          enable-cache: true
+          python-version: "3.12"
+      - uses: extractions/setup-just@f8a3cce218d9f83db3a2ecd90e41ac3de6cdfd9b # v3
+      - name: Validate the intended squash subject
+        if: github.event_name == 'pull_request'
+        env:
+          PR_TITLE: ${{ github.event.pull_request.title }}
+        run: uv run --locked python scripts/check_pr_title.py
+      - name: Check release metadata agreement
+        run: uv run --locked python scripts/check_release_proposal.py --local
+      - run: just ship-ready
+      - name: Detect a nonconforming final squash subject
+        if: github.event_name == 'push'
+        run: PR_TITLE="$(git log -1 --format=%s)" uv run --locked python scripts/check_pr_title.py
+      - name: Publish validation timing evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: validation-timing-${{ github.run_id }}
+          path: .cache/validation/
+          if-no-files-found: ignore

@@ -1,0 +1,4 @@
+[core]
+    analytics = false
+
+# The ignored config.local file receives the machine-local cache.dir setting.

@@ -1,0 +1,46 @@
+name: Work item
+description: Define one focused unit of project work
+title: "[Work]: "
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem or research need
+      description: What failure, decision, or research question should this work address?
+    validations:
+      required: true
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Acceptance criteria
+      description: List observable outcomes that will make this work complete.
+    validations:
+      required: true
+  - type: textarea
+    id: validation
+    attributes:
+      label: Validation and evidence
+      description: Include software checks and applicable scientific validation.
+    validations:
+      required: true
+  - type: textarea
+    id: scientific_outputs
+    attributes:
+      label: Scientific outputs
+      description: For material work, list proposed core data products, headline figures/maps/tables, machine-readable evidence, optional diagnostics, and output-contract status.
+  - type: dropdown
+    id: deadline_mode
+    attributes:
+      label: Deadline mode
+      description: Deadline mode may narrow optional scope but never required validation.
+      options:
+        - Not applicable
+        - Standard priorities
+        - Deadline mode
+    validations:
+      required: true
+  - type: textarea
+    id: boundaries
+    attributes:
+      label: Boundaries
+      description: Note deferred diagnostics, follow-up ideas, and privacy, licensing, data, or release constraints.

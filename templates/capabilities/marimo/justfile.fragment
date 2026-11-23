@@ -1,0 +1,5 @@
+review:
+	uv run --locked marimo run notebooks/review.py
+
+review-check:
+	uv run --locked marimo check notebooks/review.py

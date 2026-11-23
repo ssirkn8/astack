@@ -1,0 +1,13 @@
+# TODO(publication): complete every field, copy this file to the repository root, and remove this
+# line. Add `doi:` only after your archive has issued it for this exact release. Never invent one.
+cff-version: 1.2.0
+message: "If you use this software or data, please cite it as below."
+title: "TODO(publication)"
+authors:
+  - family-names: "TODO(publication)"
+    given-names: "TODO(publication)"
+    orcid: "https://orcid.org/TODO(publication)"
+version: "TODO(publication)"
+date-released: "TODO(publication)"
+license: "TODO(publication)"
+repository-code: "TODO(publication)"
