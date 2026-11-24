@@ -909,3 +909,292 @@ def test_install_and_change_policy_default_target_to_current_directory(monkeypat
     capsys.readouterr()
     assert policy_captured["target"] == Path(".")
     assert policy_captured["capabilities"] == ["scientific-review", "scientific-validation"]
+
+
+def test_approve_plan_implies_apply_and_fails_closed_on_empty_or_missing_digest(
+    tmp_path: Path, monkeypatch, capsys
+) -> None:
+    from astack import installation
+
+    target = tmp_path / "empty-target"
+    base_args = [
+        "astack",
+        "install",
+        str(target),
+        "--candidate",
+        "--initialize",
+        "--check-argv",
+        json.dumps([sys.executable, "-c", "pass"]),
+    ]
+
+    monkeypatch.setattr(sys, "argv", base_args)
+    cli.main()
+    plan = json.loads(capsys.readouterr().out)
+    assert plan["status"] == "dry-run"
+    digest = plan["plan_digest"]
+    assert not target.exists()
+
+    # Bare --apply and empty --approve-plan must both fail closed without writing anything.
+    for bad_flags in (["--apply"], ["--approve-plan", ""]):
+        monkeypatch.setattr(sys, "argv", [*base_args, *bad_flags])
+        with pytest.raises(SystemExit) as error:
+            cli.main()
+        assert error.value.code == 1
+        assert "plan digest" in capsys.readouterr().err
+        assert not target.exists()
+
+    # --approve-plan alone implies --apply.
+    monkeypatch.setattr(sys, "argv", [*base_args, "--approve-plan", digest])
+    cli.main()
+    applied = json.loads(capsys.readouterr().out)
+    assert applied["status"] == "applied"
+    assert (target / ".astack/manifest.json").is_file()
+
+    # --apply --approve-plan remains accepted for backward compatibility.
+    target_compat = tmp_path / "compat-target"
+    compat_args = [
+        "astack",
+        "install",
+        str(target_compat),
+        "--candidate",
+        "--initialize",
+        "--check-argv",
+        json.dumps([sys.executable, "-c", "pass"]),
+    ]
+    monkeypatch.setattr(sys, "argv", compat_args)
+    cli.main()
+    compat_digest = json.loads(capsys.readouterr().out)["plan_digest"]
+    monkeypatch.setattr(sys, "argv", [*compat_args, "--apply", "--approve-plan", compat_digest])
+    cli.main()
+    assert json.loads(capsys.readouterr().out)["status"] == "applied"
+
+    # Recovery: bare --apply and --approve-plan "" fail closed; --approve-plan alone recovers.
+    journal = target / installation.TRANSACTION
+    journal.write_text(json.dumps({"schema_version": 1, "files": {}, "created_dirs": []}))
+    monkeypatch.setattr(sys, "argv", ["astack", "install", str(target), "--recover"])
+    cli.main()
+    recover_digest = json.loads(capsys.readouterr().out)["plan_digest"]
+
+    for bad_flags in (["--apply"], ["--approve-plan", ""]):
+        monkeypatch.setattr(
+            sys, "argv", ["astack", "install", str(target), "--recover", *bad_flags]
+        )
+        with pytest.raises(SystemExit) as error:
+            cli.main()
+        assert error.value.code == 1
+        assert "exact conflict-free" in capsys.readouterr().err
+        assert journal.is_file()
+
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        ["astack", "install", str(target), "--recover", "--approve-plan", recover_digest],
+    )
+    cli.main()
+    assert json.loads(capsys.readouterr().out)["status"] == "recovered"
+    assert not journal.exists()
+
+    # Recovery with explicit --apply --approve-plan also still works.
+    journal.write_text(json.dumps({"schema_version": 1, "files": {}, "created_dirs": []}))
+    monkeypatch.setattr(sys, "argv", ["astack", "install", str(target), "--recover"])
+    cli.main()
+    recover_digest_2 = json.loads(capsys.readouterr().out)["plan_digest"]
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "astack",
+            "install",
+            str(target),
+            "--recover",
+            "--apply",
+            "--approve-plan",
+            recover_digest_2,
+        ],
+    )
+    cli.main()
+    assert json.loads(capsys.readouterr().out)["status"] == "recovered"
+
+
+def test_change_policy_cli_approve_plan_implies_apply_dispatch(
+    tmp_path: Path, monkeypatch, capsys
+) -> None:
+    from astack import installation
+
+    captured: dict[str, object] = {}
+
+    def fake_transition(target: Path, **kwargs: object) -> dict[str, object]:
+        captured.clear()
+        captured.update({"target": target, **kwargs})
+        return {"status": "applied" if kwargs.get("apply") else "dry-run"}
+
+    monkeypatch.setattr(installation, "transition_project_policy", fake_transition)
+    target = tmp_path / "repo"
+    base = ["astack", "change-policy", str(target), "--profile", "data-science", "--candidate"]
+
+    cases = [
+        ([], False, None),
+        (["--apply"], True, None),
+        (["--approve-plan", ""], True, ""),
+        (["--approve-plan", "a" * 64], True, "a" * 64),
+        (["--apply", "--approve-plan", "b" * 64], True, "b" * 64),
+    ]
+    for extra, expected_apply, expected_approve in cases:
+        monkeypatch.setattr(sys, "argv", [*base, *extra])
+        cli.main()
+        capsys.readouterr()
+        assert captured["apply"] is expected_apply
+        assert captured["approve_plan"] == expected_approve
+
+
+def test_runtime_upgrade_cli_defaults_to_latest_and_implies_apply_on_approve_plan(
+    tmp_path: Path, monkeypatch, capsys
+) -> None:
+    from project_tool_test_support import project_tool
+
+    from astack import release_upgrade
+
+    (tmp_path / ".astack").mkdir()
+    (tmp_path / ".astack/manifest.json").write_text(json.dumps({"profile": "general"}))
+    endpoints: list[str] = []
+
+    def fake_github_json(endpoint: str) -> dict[str, object]:
+        endpoints.append(endpoint)
+        if endpoint in {"releases/latest", "releases/tags/v1.2.1"}:
+            return {
+                "tag_name": "v1.2.1",
+                "draft": False,
+                "prerelease": False,
+                "published_at": "2026-10-07T00:00:00Z",
+                "id": 42,
+            }
+        if endpoint == "git/ref/tags/v1.2.1":
+            return {"ref": "refs/tags/v1.2.1", "object": {"type": "commit", "sha": "a" * 40}}
+        raise AssertionError(f"unexpected endpoint: {endpoint}")
+
+    def fake_run(command: list[str], target: Path) -> subprocess.CompletedProcess[str]:
+        payload: dict[str, object] = {
+            "status": "applied" if "--apply" in command else "dry-run",
+            "profile": "general",
+            "source": {
+                "kind": "release",
+                "tag": "v1.2.1",
+                "commit": "a" * 40,
+                "release_id": "42",
+            },
+            "conflicts": [],
+            "plan_digest": "c" * 64,
+        }
+        return subprocess.CompletedProcess(command, 0, json.dumps(payload), "")
+
+    monkeypatch.setattr(release_upgrade, "_github_json", fake_github_json)
+    monkeypatch.setattr(release_upgrade, "_run", fake_run)
+    monkeypatch.chdir(tmp_path)
+
+    # Omitted tag resolves releases/latest and routes through resolve_release.
+    monkeypatch.setattr(sys, "argv", ["workflow.py", "upgrade"])
+    project_tool.main()
+    plan = json.loads(capsys.readouterr().out)
+    assert plan["status"] == "dry-run"
+    assert plan["target_version"] == "v1.2.1"
+    assert endpoints == ["releases/latest", "releases/tags/v1.2.1", "git/ref/tags/v1.2.1"]
+
+    # Explicit "latest" follows the same path.
+    endpoints.clear()
+    monkeypatch.setattr(sys, "argv", ["workflow.py", "upgrade", "latest"])
+    project_tool.main()
+    assert json.loads(capsys.readouterr().out)["target_version"] == "v1.2.1"
+    assert endpoints == ["releases/latest", "releases/tags/v1.2.1", "git/ref/tags/v1.2.1"]
+
+    # Bare --apply and --approve-plan "" fail closed.
+    for argv in (
+        ["workflow.py", "upgrade", "--apply"],
+        ["workflow.py", "upgrade", "--approve-plan", ""],
+        ["workflow.py", "upgrade", "v1.2.1", "--approve-plan", ""],
+    ):
+        monkeypatch.setattr(sys, "argv", argv)
+        with pytest.raises(SystemExit) as error:
+            project_tool.main()
+        assert error.value.code == 1
+        assert "exact conflict-free" in capsys.readouterr().err
+
+    # --approve-plan alone implies --apply for omitted tag, "latest", and exact tag.
+    for argv in (
+        ["workflow.py", "upgrade", "--approve-plan", "c" * 64],
+        ["workflow.py", "upgrade", "latest", "--approve-plan", "c" * 64],
+        ["workflow.py", "upgrade", "v1.2.1", "--approve-plan", "c" * 64],
+        ["workflow.py", "upgrade", "v1.2.1", "--apply", "--approve-plan", "c" * 64],
+    ):
+        monkeypatch.setattr(sys, "argv", argv)
+        project_tool.main()
+        result = json.loads(capsys.readouterr().out)
+        assert result["status"] == "applied"
+        assert result["target_version"] == "v1.2.1"
+
+
+@pytest.mark.parametrize(
+    "payload",
+    [
+        {
+            "tag_name": "v1.2.1",
+            "draft": True,
+            "prerelease": False,
+            "published_at": "2026-10-07T00:00:00Z",
+            "id": 42,
+        },
+        {
+            "tag_name": "v1.2.1",
+            "draft": False,
+            "prerelease": True,
+            "published_at": "2026-10-07T00:00:00Z",
+            "id": 42,
+        },
+        {
+            "tag_name": "main",
+            "draft": False,
+            "prerelease": False,
+            "published_at": "2026-10-07T00:00:00Z",
+            "id": 42,
+        },
+        {
+            "tag_name": "v1.2.1-rc1",
+            "draft": False,
+            "prerelease": False,
+            "published_at": "2026-10-07T00:00:00Z",
+            "id": 42,
+        },
+        {
+            "tag_name": "v1.2.1",
+            "draft": False,
+            "prerelease": False,
+            "published_at": None,
+            "id": 42,
+        },
+        {
+            "tag_name": "v1.2.1",
+            "draft": False,
+            "prerelease": False,
+            "published_at": "2026-10-07T00:00:00Z",
+            "id": True,
+        },
+    ],
+)
+def test_resolve_latest_release_rejects_non_stable_payloads(
+    monkeypatch, payload: dict[str, object]
+) -> None:
+    from astack import release_upgrade
+
+    monkeypatch.setattr(release_upgrade, "_github_json", lambda _endpoint: payload)
+    with pytest.raises(ValueError, match="published stable"):
+        release_upgrade.resolve_latest_release()
+
+
+def test_resolve_latest_release_fails_closed_when_github_api_unavailable(monkeypatch) -> None:
+    from astack import release_upgrade
+
+    def unavailable(_endpoint: str) -> dict[str, object]:
+        raise RuntimeError("Published release evidence is unavailable")
+
+    monkeypatch.setattr(release_upgrade, "_github_json", unavailable)
+    with pytest.raises(RuntimeError, match="unavailable"):
+        release_upgrade.resolve_latest_release()

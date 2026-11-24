@@ -74,6 +74,22 @@ def resolve_release(tag: str) -> dict[str, str]:
     raise ValueError("Release tag nesting exceeds the supported limit")
 
 
+def resolve_latest_release() -> dict[str, str]:
+    """Resolve the latest published stable release tag, then verify it via `resolve_release`."""
+    release = _github_json("releases/latest")
+    tag = release.get("tag_name")
+    if (
+        not isinstance(tag, str)
+        or TAG_PATTERN.fullmatch(tag) is None
+        or release.get("draft") is not False
+        or release.get("prerelease") is not False
+        or not release.get("published_at")
+        or type(release.get("id")) is not int
+    ):
+        raise ValueError("Latest GitHub release is not a published stable workflow release")
+    return resolve_release(tag)
+
+
 def _run(command: list[str], target: Path) -> subprocess.CompletedProcess[str]:
     # Do not let a project's module path shadow the exact-release tool installation.
     env = dict(os.environ)
@@ -83,24 +99,27 @@ def _run(command: list[str], target: Path) -> subprocess.CompletedProcess[str]:
 
 def upgrade_release(
     target: Path,
-    tag: str,
+    tag: str | None = None,
     *,
     apply: bool = False,
     approve_plan: str | None = None,
 ) -> dict[str, Any]:
-    """Upgrade an astack project with the installer from an exact published release."""
+    """Upgrade an astack project with the installer from a published release."""
     target = target.expanduser().resolve()
     if not (target / ".astack/manifest.json").is_file():
         raise ValueError("No astack installation found. Adopt the project with `astack install`.")
-    release_version(tag)
-    return _upgrade_release(target, tag, apply=apply, approve_plan=approve_plan)
+    if tag is None or tag == "latest":
+        release = resolve_latest_release()
+    else:
+        release_version(tag)
+        release = resolve_release(tag)
+    return _upgrade_release(target, release, apply=apply, approve_plan=approve_plan)
 
 
 def _upgrade_release(
-    target: Path, tag: str, *, apply: bool, approve_plan: str | None
+    target: Path, release: dict[str, str], *, apply: bool, approve_plan: str | None
 ) -> dict[str, Any]:
     """Use the exact release's installer, without a maintainer checkout."""
-    release = resolve_release(tag)
     manifest = json.loads((target / ".astack/manifest.json").read_text())
     if not isinstance(manifest, dict) or manifest.get("profile", "general") not in {
         "general",

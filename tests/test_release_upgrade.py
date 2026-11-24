@@ -1,6 +1,7 @@
 """Exact-release consumer tests use mocked GitHub evidence, never live releases."""
 
 import json
+import os
 import subprocess
 from pathlib import Path
 from unittest.mock import patch
@@ -151,3 +152,142 @@ def test_generated_project_upgrades_through_the_exact_release_installer(monkeypa
 def test_upgrade_without_an_installation_is_refused(tmp_path):
     with pytest.raises(ValueError, match="No astack installation"):
         consumer.upgrade_release(tmp_path, "v1.2.1")
+    with pytest.raises(ValueError, match="No astack installation"):
+        consumer.upgrade_release(tmp_path)
+
+
+def test_upgrade_defaults_to_latest_stable_release_through_resolve_release(monkeypatch, tmp_path):
+    root = project(tmp_path)
+    endpoints: list[str] = []
+
+    def api(endpoint: str):
+        endpoints.append(endpoint)
+        if endpoint in {"releases/latest", "releases/tags/v1.2.1"}:
+            return {
+                "tag_name": "v1.2.1",
+                "draft": False,
+                "prerelease": False,
+                "published_at": "2026-10-07T00:00:00Z",
+                "id": 42,
+            }
+        if endpoint == "git/ref/tags/v1.2.1":
+            return {"ref": "refs/tags/v1.2.1", "object": {"type": "tag", "sha": "b" * 40}}
+        if endpoint == f"git/tags/{'b' * 40}":
+            return {"object": {"type": "commit", "sha": "c" * 40}}
+        raise AssertionError(f"unexpected endpoint: {endpoint}")
+
+    calls: list[list[str]] = []
+
+    def run(command, target):
+        calls.append(command)
+        payload: dict[str, object] = {
+            "status": "applied" if "--apply" in command else "dry-run",
+            "profile": "data-science",
+            "source": {
+                "kind": "release",
+                "tag": "v1.2.1",
+                "commit": "c" * 40,
+                "release_id": "42",
+            },
+            "conflicts": [],
+            "plan_digest": "d" * 64,
+        }
+        return subprocess.CompletedProcess(command, 0, json.dumps(payload), "")
+
+    monkeypatch.setattr(consumer, "_github_json", api)
+    monkeypatch.setattr(consumer, "_run", run)
+
+    plan = consumer.upgrade_release(root)
+    assert plan["status"] == "dry-run"
+    assert plan["target_version"] == "v1.2.1"
+    assert plan["release"]["commit"] == "c" * 40
+    assert endpoints == [
+        "releases/latest",
+        "releases/tags/v1.2.1",
+        "git/ref/tags/v1.2.1",
+        f"git/tags/{'b' * 40}",
+    ]
+
+    endpoints.clear()
+    applied = consumer.upgrade_release(root, "latest", apply=True, approve_plan=plan["plan_digest"])
+    assert applied["status"] == "applied"
+    assert applied["target_version"] == "v1.2.1"
+    assert "--apply" in calls[-1] and "--approve-plan" in calls[-1]
+
+
+@pytest.mark.parametrize("bad_tag", ["main", "", "v1.2.1-rc1"])
+def test_upgrade_rejects_moving_or_prerelease_explicit_tags(tmp_path, bad_tag: str):
+    root = project(tmp_path)
+    with pytest.raises(ValueError, match="exact release"):
+        consumer.upgrade_release(root, bad_tag)
+
+
+@pytest.mark.skipif(os.name != "posix", reason="POSIX executable shims")
+def test_generated_project_astack_run_upgrade_defaults_to_latest_and_implies_apply(tmp_path):
+    import sys
+
+    root = project(tmp_path)
+    shim_dir = tmp_path / "bin"
+    shim_dir.mkdir()
+
+    gh_stub = shim_dir / "gh"
+    gh_stub.write_text(
+        f"#!{sys.executable}\n"
+        "import json, sys\n"
+        "endpoint = sys.argv[-1]\n"
+        "if endpoint.endswith('/releases/latest') or endpoint.endswith('/releases/tags/v1.2.1'):\n"
+        "    print(json.dumps({'tag_name': 'v1.2.1', 'draft': False, 'prerelease': False, "
+        "'published_at': '2026-10-07T00:00:00Z', 'id': 42}))\n"
+        "elif endpoint.endswith('/git/ref/tags/v1.2.1'):\n"
+        "    print(json.dumps({'ref': 'refs/tags/v1.2.1', "
+        f"'object': {{'type': 'commit', 'sha': {'a' * 40!r}}}}}))\n"
+        "else:\n"
+        "    raise SystemExit(1)\n",
+        encoding="utf-8",
+    )
+    gh_stub.chmod(0o755)
+
+    uv_stub = shim_dir / "uv"
+    uv_stub.write_text(
+        f"#!{sys.executable}\n"
+        "import json, sys\n"
+        "payload = {\n"
+        "    'status': 'applied' if '--apply' in sys.argv else 'dry-run',\n"
+        "    'profile': 'data-science',\n"
+        "    'source': {'kind': 'release', 'tag': 'v1.2.1', "
+        f"'commit': {'a' * 40!r}, 'release_id': '42'}},\n"
+        "    'conflicts': [],\n"
+        f"    'plan_digest': {'d' * 64!r},\n"
+        "}\n"
+        "print(json.dumps(payload))\n",
+        encoding="utf-8",
+    )
+    uv_stub.chmod(0o755)
+
+    env = {**os.environ, "PATH": f"{shim_dir}{os.pathsep}{os.environ.get('PATH', '')}"}
+
+    def run_upgrade(*extra: str) -> subprocess.CompletedProcess[str]:
+        return subprocess.run(
+            [sys.executable, "-m", "astack.cli", "run", "upgrade", *extra],
+            cwd=root,
+            env=env,
+            text=True,
+            capture_output=True,
+            check=False,
+        )
+
+    dry = run_upgrade()
+    assert dry.returncode == 0, dry.stderr
+    dry_payload = json.loads(dry.stdout)
+    assert dry_payload["status"] == "dry-run"
+    assert dry_payload["target_version"] == "v1.2.1"
+
+    empty = run_upgrade("--approve-plan", "")
+    assert empty.returncode == 1
+    assert "exact conflict-free" in empty.stderr
+
+    applied = run_upgrade("--approve-plan", dry_payload["plan_digest"])
+    assert applied.returncode == 0, applied.stderr
+    applied_payload = json.loads(applied.stdout)
+    assert applied_payload["status"] == "applied"
+    assert applied_payload["target_version"] == "v1.2.1"

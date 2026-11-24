@@ -10,8 +10,8 @@ Installed once on your machine (`uv tool install 'git+https://github.com/ssirkn8
 | --- | --- |
 | `astack --version` | Print the installed astack version. |
 | `astack new <dir>` | Create a Data Science project (interactive prompts in a terminal, or pass `--name`, `--package`, `--description`, `--intended-use`, `--tool quarto`, `--no-dvc`, `--no-git`). |
-| `astack install [<dir>]` | Adopt or upgrade an existing repository (`<dir>` defaults to `.`). Dry-run by default. Uses the installed version's release tag unless `--release <tag>` or `--candidate` is passed. Accepts `--check <cmd>`, `--check-argv <json>`, `--initialize`, `--recover`, and `--apply --approve-plan <plan_digest>`. |
-| `astack change-policy [<dir>]` | Switch profile (`--profile general\|data-science`) or `--capability` flags (`<dir>` defaults to `.`, and `data-science` enables its required capabilities when `--capability` is omitted). Dry-run by default. Uses the installed version's release tag unless `--release <tag>` or `--candidate` is passed, applied with `--apply --approve-plan <plan_digest>`. |
+| `astack install [<dir>]` | Adopt or upgrade an existing repository (`<dir>` defaults to `.`). Dry-run by default. Uses the installed version's release tag unless `--release <tag>` or `--candidate` is passed. Accepts `--check <cmd>`, `--check-argv <json>`, `--initialize`, `--recover`, and `--approve-plan <plan_digest>` (implies `--apply`). |
+| `astack change-policy [<dir>]` | Switch profile (`--profile general\|data-science`) or `--capability` flags (`<dir>` defaults to `.`, and `data-science` enables its required capabilities when `--capability` is omitted). Dry-run by default. Uses the installed version's release tag unless `--release <tag>` or `--candidate` is passed, applied with `--approve-plan <plan_digest>` (implies `--apply`). |
 | `astack doctor` | Read-only check of project tools, `.astack/` files, all managed skill directories, and detected harness CLIs. Pass `--harness <name>` (`claude-code`, `codex`, `opencode`, or `pi`) to check and require one harness, or `--root <dir>` to inspect another directory. |
 | `astack skills` | Verify pinned upstream skills, or copy them outside a project with `--dest <dir>` (dry-run) and `--apply`. |
 | `astack run <subcommand> [args...]` | Forward a workflow subcommand to the enclosing project's `.astack/workflow.py` (uses the synced `.venv` Python in Data Science projects). |
@@ -73,6 +73,6 @@ Run these from anywhere inside an astack project. Every command delegates to `.a
 | `astack run share-raw [--apply]` | Preview or link read-only `data/raw/` from the canonical checkout into a linked Git worktree. |
 | `astack run export-public --out <dir>` | Write an allowlisted, secret-scanned, history-free public export of the committed project. |
 | `astack run file-audit --report <path> --commit <sha> --scope <scope> --actionable-count <n> [--to auto\|github\|local\|none] [--remove-on-success]` | File an audit report as a GitHub issue, or keep it locally when GitHub is unavailable. |
-| `astack run upgrade <tag> [--apply --approve-plan <plan_digest>]` | Fetch an exact published astack release and plan or apply a checksum-safe upgrade. |
+| `astack run upgrade [<tag>] [--approve-plan <plan_digest>]` | Fetch the latest published stable astack release (or an exact `<tag>`) and plan or apply a checksum-safe upgrade (`--approve-plan` implies `--apply`). |
 | `astack run dvc-status` | Show DVC pipeline status (DVC projects only). |
 | `astack run dvc-cache <status \| gc [--apply]>` | Inspect or garbage-collect the project's DVC cache (DVC projects only). |
