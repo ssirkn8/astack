@@ -6,6 +6,7 @@ import json
 import keyword
 import os
 import re
+import shlex
 import shutil
 import subprocess
 import sys
@@ -227,6 +228,46 @@ def _context_command(args: argparse.Namespace) -> str:
     return " ".join(parts)
 
 
+class _AppendCheckAction(argparse.Action):
+    """Preserve CLI order when `--check` and `--check-argv` are combined."""
+
+    def __call__(
+        self,
+        parser: argparse.ArgumentParser,
+        namespace: argparse.Namespace,
+        values: Any,
+        option_string: str | None = None,
+    ) -> None:
+        del parser
+        items = list(getattr(namespace, self.dest, None) or [])
+        items.append((option_string, values))
+        setattr(namespace, self.dest, items)
+
+
+def _parse_install_checks(specs: list[tuple[str | None, str]] | None) -> list[list[str]] | None:
+    if not specs:
+        return None
+    commands: list[list[str]] = []
+    for flag, raw in specs:
+        if flag == "--check":
+            try:
+                argv = shlex.split(raw)
+            except ValueError as exc:
+                raise ValueError(f"Invalid --check command {raw!r}: {exc}") from exc
+            if not argv or not argv[0]:
+                raise ValueError(
+                    "Invalid --check command: command string must start with a nonempty executable"
+                )
+            commands.append(argv)
+        else:
+            try:
+                argv = json.loads(raw)
+            except json.JSONDecodeError as exc:
+                raise ValueError(f"Invalid --check-argv JSON {raw!r}: {exc}") from exc
+            commands.append(argv)
+    return commands
+
+
 def _release_target(args: argparse.Namespace) -> str | None:
     # Check `is None` so an explicit `--release ""` still fails closed in `_source_identity`.
     if args.release is None and not args.candidate:
@@ -370,7 +411,13 @@ def _parser() -> argparse.ArgumentParser:
     install = subparsers.add_parser(
         "install", help="Add astack to an existing repository, or upgrade it (dry-run first)"
     )
-    install.add_argument("target", type=Path)
+    install.add_argument(
+        "target",
+        nargs="?",
+        default=Path("."),
+        type=Path,
+        help="Target repository directory (defaults to the current directory)",
+    )
     source = install.add_mutually_exclusive_group()
     source.add_argument(
         "--release", help="Exact published release tag (defaults to the installed version)"
@@ -379,7 +426,18 @@ def _parser() -> argparse.ArgumentParser:
         "--candidate", action="store_true", help="Explicit unpublished development candidate"
     )
     install.add_argument(
-        "--check-argv", action="append", help="One exact check command as a JSON argv array"
+        "--check",
+        dest="check_specs",
+        action=_AppendCheckAction,
+        metavar="COMMAND",
+        help="One check command string, split into argv without a shell (e.g. 'npm test')",
+    )
+    install.add_argument(
+        "--check-argv",
+        dest="check_specs",
+        action=_AppendCheckAction,
+        metavar="JSON",
+        help="One exact check command as a JSON argv array",
     )
     install.add_argument(
         "--initialize", action="store_true", help="Initialize an empty destination"
@@ -395,13 +453,22 @@ def _parser() -> argparse.ArgumentParser:
     )
     doctor.add_argument("--root", type=Path, default=Path.cwd())
     doctor.add_argument(
-        "--harness", choices=("opencode", "pi", "codex", "claude-code"), required=True
+        "--harness",
+        choices=("opencode", "pi", "codex", "claude-code"),
+        default=None,
+        help="Check and require one specific harness (defaults to checking all skill directories)",
     )
 
     policy = subparsers.add_parser(
         "change-policy", help="Switch a project between General and Data Science (dry-run first)"
     )
-    policy.add_argument("target", type=Path)
+    policy.add_argument(
+        "target",
+        nargs="?",
+        default=Path("."),
+        type=Path,
+        help="Target repository directory (defaults to the current directory)",
+    )
     policy.add_argument("--profile", choices=("general", "data-science"), required=True)
     policy.add_argument(
         "--capability",
@@ -499,9 +566,7 @@ def main() -> None:
                     args.target, apply=args.apply, approve_plan=args.approve_plan
                 )
             else:
-                commands = (
-                    [json.loads(value) for value in args.check_argv] if args.check_argv else None
-                )
+                commands = _parse_install_checks(args.check_specs)
                 install_result = install_project(
                     args.target,
                     release=_release_target(args),

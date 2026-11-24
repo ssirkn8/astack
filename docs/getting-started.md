@@ -52,13 +52,15 @@ Put project-specific agent instructions in `AGENTS.md`. Every supported harness 
 
 Use `astack install` to adopt astack in an existing software or hybrid repository in any language. It adds `.astack/` and managed skills without touching your source code, README, CI, dependencies, lockfiles, data, or Git history.
 
+From inside your repository (or pass `<dir>` explicitly):
+
 ```sh
-astack install /path/to/project --release vX.Y.Z --check-argv '["npm", "test"]'
+astack install --check "npm test"
 ```
 
-Your installed `astack` CLI must come from that exact published release commit. To run a different release without reinstalling globally, prefix with `uv tool run --from 'git+https://github.com/ssirkn8/astack.git@<verified-release-commit>'`.
+By default, `astack install` targets the current directory (`.`) and installs the exact published release matching your installed CLI version (`--release vX.Y.Z` overrides the tag). Your installed `astack` CLI must come from that exact published release commit. To run a different release without reinstalling globally, prefix with `uv tool run --from 'git+https://github.com/ssirkn8/astack.git@<verified-release-commit>'`.
 
-- `--check-argv` tells astack your project's exact check command as a JSON array (executed without a shell). Repeat `--check-argv` if you need multiple check commands.
+- `--check` splits a command string into argv tokens without a shell (for example `--check "npm test"`). Use `--check-argv` when you need an exact JSON argv array (for example `--check-argv '["npm", "test"]'`). Repeat either flag if you need multiple check commands.
 - `--initialize` initializes Git and installs workflow files into an empty directory without scaffolding a Python starter template.
 - **Dry-run first, always.** `astack install` prints every proposed path, source identity, ownership decision, conflict, and a SHA-256 `plan_digest` without writing anything. Apply by rerunning with the exact same arguments plus `--apply --approve-plan <plan_digest>` using the `plan_digest` printed by the dry run. Any change to files, Git state, checks, or release source invalidates that digest and refuses to apply.
 - Ordinary work in a General project uses only Python's standard library (DVC metadata checks require PyYAML). Because `astack install` adds no `justfile`, run the strict audit with `astack run audit --strict --run-tools`.
@@ -83,7 +85,7 @@ Safety rules:
 - Any edited managed file blocks the upgrade so your changes are never silently lost.
 - An older astack release never rewrites a project installed by a newer release. Roll back with Git instead.
 - Each apply holds a short-lived lock and writes a transaction journal, verifying written bytes before updating `.astack/version` and the manifest.
-- If an install or upgrade is interrupted, the journal blocks future installs until recovered. Inspect the recovery plan with `astack install /path/to/project --recover` and apply with its printed `--approve-plan <plan_digest>`. Recovery restores only recorded workflow paths, preserves independent application edits, and refuses changed workflow files, unknown ownership, or an active/unknown lock owner. (On Windows, lock-owner liveness cannot be verified and therefore blocks automatic lock recovery.)
+- If an install or upgrade is interrupted, the journal blocks future installs until recovered. Inspect the recovery plan with `astack install --recover` (or pass `<dir>`) and apply with its printed `--approve-plan <plan_digest>`. Recovery restores only recorded workflow paths, preserves independent application edits, and refuses changed workflow files, unknown ownership, or an active/unknown lock owner. (On Windows, lock-owner liveness cannot be verified and therefore blocks automatic lock recovery.)
 
 ## Switching profiles (`astack change-policy`)
 
@@ -93,17 +95,13 @@ Every project shares the same runtime and `.astack/project.toml`. Choose a profi
 - **`general` with scientific capabilities**: mainly software that also produces scientific outputs. Keeps your language, layout, and checks while opting into `scientific-review`, `scientific-validation`, or `[review] scientific_paths`.
 - **Plain `general`**: ordinary software making no scientific claims. Science checks stay `not-assessed`, never `pass`.
 
-Switch profile or capabilities later using the same dry-run and `plan_digest` approval flow:
+Switch profile or capabilities later from inside your repository (or pass `<dir>` explicitly) using the same dry-run and `plan_digest` approval flow:
 
 ```sh
-astack change-policy /path/to/project \
-  --release vX.Y.Z \
-  --profile data-science \
-  --capability scientific-review \
-  --capability scientific-validation
+astack change-policy --profile data-science
 ```
 
-As with `install`, your installed CLI must match that published release commit (or prefix with `uv tool run --from 'git+https://github.com/ssirkn8/astack.git@<verified-release-commit>'`). Apply with `--apply --approve-plan <plan_digest>` using the `plan_digest` printed by the preview.
+By default, `astack change-policy` targets the current directory (`.`), uses the exact published release matching your installed CLI version (`--release vX.Y.Z` overrides the tag), and enables both `scientific-review` and `scientific-validation` when switching to `data-science` without explicit `--capability` flags. As with `install`, your installed CLI must match that published release commit (or prefix with `uv tool run --from 'git+https://github.com/ssirkn8/astack.git@<verified-release-commit>'`). Apply with `--apply --approve-plan <plan_digest>` using the `plan_digest` printed by the preview.
 
 What `change-policy` does and does not do:
 
@@ -125,13 +123,13 @@ Each coding-agent harness discovers skills in its own folder, so astack writes t
 | OpenCode | `.opencode/skills/`, `.claude/skills/`, `.agents/skills/` | Discovers all three. |
 | Pi | `.agents/skills/`, plus `.pi/settings.json` | Active after you trust the project. |
 
-Check that your tools, skill files, and configuration are healthy for a specific harness:
+Check that your project's tools, managed skill files across all discovery directories, and configuration are healthy, and see which harness CLIs are installed:
 
 ```sh
-astack doctor --harness claude-code   # or codex, opencode, pi
+astack doctor
 ```
 
-`astack doctor` is read-only. It verifies files and CLI tools on disk, but cannot inspect an agent's internal session state, so confirm skill discovery by asking your agent to list its skills.
+Pass `--harness claude-code` (or `codex`, `opencode`, `pi`) to check and require one specific harness CLI and its configuration. `astack doctor` is read-only. It verifies files and CLI tools on disk, but cannot inspect an agent's internal session state, so confirm skill discovery by asking your agent to list its skills.
 
 Harness-specific behavior to know:
 
