@@ -118,9 +118,74 @@ RETIRED_COMMANDS = {
     "Use `astack doctor` to check a project.",
     "setup": "`astack new` and `astack install` now write .pi/settings.json. "
     "Use `astack doctor` to check a project.",
-    "upgrade-release": "Run `python .astack/workflow.py upgrade <tag>` in the project.",
-    "validate": "Run `python .astack/workflow.py validate <tier>` in the project.",
+    "upgrade-release": "Run `astack run upgrade <tag>` in the project.",
+    "validate": "Run `astack run validate <tier>` in the project.",
 }
+
+
+def _find_project_root(start: Path) -> Path | None:
+    """Return the nearest enclosing directory containing `.astack/workflow.py`, or None."""
+    current = start.resolve()
+    for candidate in (current, *current.parents):
+        if (candidate / ".astack" / "workflow.py").is_file():
+            return candidate
+    return None
+
+
+def _workflow_command_env(project_root: Path) -> tuple[str, dict[str, str] | None]:
+    """Prefer the synced project venv for Data Science projects and put its bin dir on PATH."""
+    try:
+        from .project_policy import project_profile
+
+        profile = project_profile(project_root)
+    except (OSError, ValueError):
+        return sys.executable, None
+    if profile == "data-science":
+        for relative in ((".venv", "bin", "python"), (".venv", "Scripts", "python.exe")):
+            candidate = project_root.joinpath(*relative)
+            if candidate.is_file() and os.access(candidate, os.X_OK):
+                env = os.environ.copy()
+                bin_dir = str(candidate.parent)
+                current_path = env.get("PATH", "")
+                env["PATH"] = f"{bin_dir}{os.pathsep}{current_path}" if current_path else bin_dir
+                return str(candidate), env
+    return sys.executable, None
+
+
+def _run_project_workflow(workflow_args: list[str]) -> int:
+    if not workflow_args:
+        print("usage: astack run <subcommand> [args...]", file=sys.stderr)
+        print(
+            "astack run: missing subcommand. Run `astack run --help` inside an astack project "
+            "to list available workflow commands.",
+            file=sys.stderr,
+        )
+        return 2
+    cwd = Path.cwd()
+    project_root = _find_project_root(cwd)
+    if project_root is None:
+        if workflow_args in (["-h"], ["--help"]):
+            _parser().parse_args(["run", *workflow_args])
+        print(
+            f"astack run: no .astack/workflow.py found in {cwd.resolve()} or any parent "
+            "directory. Run this inside an astack project, or create one with `astack new` "
+            "or `astack install`.",
+            file=sys.stderr,
+        )
+        return 1
+    workflow_script = project_root / ".astack" / "workflow.py"
+    python_executable, env = _workflow_command_env(project_root)
+    command = [python_executable, str(workflow_script), *workflow_args]
+    try:
+        # Replace the wrapper on POSIX so signals like Ctrl-C go only to the workflow process.
+        if os.name == "posix":
+            os.chdir(project_root)
+            os.execve(python_executable, command, os.environ if env is None else env)
+        completed = subprocess.run(command, cwd=project_root, env=env, check=False)
+    except OSError as exc:
+        print(f"astack run: could not execute {workflow_script}: {exc}", file=sys.stderr)
+        return 1
+    return 128 - completed.returncode if completed.returncode < 0 else completed.returncode
 
 
 def _project_details(args: argparse.Namespace) -> dict[str, Any]:
@@ -341,6 +406,19 @@ def _parser() -> argparse.ArgumentParser:
     )
     skills.add_argument("--dest", type=Path, help="Explicit provider skill discovery directory")
     skills.add_argument("--apply", action="store_true", help="Copy after full ownership preflight")
+
+    run = subparsers.add_parser(
+        "run",
+        help="Run a project workflow command via .astack/workflow.py",
+        description=(
+            "Forward a subcommand and its arguments to the enclosing project's "
+            ".astack/workflow.py. Run `astack run --help` inside an astack project "
+            "to list available workflow commands."
+        ),
+        usage="astack run <subcommand> [args...]",
+    )
+    run.add_argument("subcommand", help="Workflow subcommand to pass to .astack/workflow.py")
+    run.add_argument("args", nargs=argparse.REMAINDER, help="Arguments passed verbatim")
     if release_cli is not None:
         release_cli.register(subparsers)
     return parser
@@ -350,6 +428,12 @@ def _parser() -> argparse.ArgumentParser:
 def main() -> None:
     if len(sys.argv) > 1 and sys.argv[1] in RETIRED_COMMANDS:
         raise SystemExit(f"astack {sys.argv[1]} was removed. {RETIRED_COMMANDS[sys.argv[1]]}")
+    # Dispatch `run` before argparse so subcommand flags (including -h/--help) pass through.
+    if len(sys.argv) > 1 and sys.argv[1] == "run":
+        code = _run_project_workflow(sys.argv[2:])
+        if code != 0:
+            raise SystemExit(code)
+        return
     args = _parser().parse_args()
     if args.command == "change-policy":
         from .installation import transition_project_policy
