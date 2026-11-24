@@ -38,7 +38,7 @@ def test_current_distribution_has_no_sds_aliases() -> None:
 
 def test_public_release_forbids_branch_sanitization() -> None:
     skill = Path(".opencode/skills/publish-public/SKILL.md").read_text(encoding="utf-8")
-    policy = Path("docs/public_release_policy.md").read_text(encoding="utf-8")
+    policy = Path("docs/publishing.md").read_text(encoding="utf-8")
     assert "Never use a branch" in skill
     assert "A branch is not a privacy" in policy
     assert "allowlist" in skill
@@ -117,7 +117,7 @@ def test_generated_project_guidance_distinguishes_required_and_optional_outputs(
 
 
 def test_validation_tiers_remain_progressive_and_optional() -> None:
-    guidance = Path("docs/validation.md").read_text(encoding="utf-8")
+    guidance = Path("docs/checks-and-audit.md").read_text(encoding="utf-8")
     template = Path("templates/project/docs/validation.md").read_text(encoding="utf-8")
 
     for text in [guidance, template]:
