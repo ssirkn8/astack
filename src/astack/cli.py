@@ -227,6 +227,13 @@ def _context_command(args: argparse.Namespace) -> str:
     return " ".join(parts)
 
 
+def _release_target(args: argparse.Namespace) -> str | None:
+    # Check `is None` so an explicit `--release ""` still fails closed in `_source_identity`.
+    if args.release is None and not args.candidate:
+        return f"v{workflow_version()}"
+    return None if args.release is None else str(args.release)
+
+
 def _emit_result(result: object, cwd: Path, *, command: str) -> None:
     del cwd
     payload = dict(result) if isinstance(result, dict) else {"result": result}
@@ -365,7 +372,9 @@ def _parser() -> argparse.ArgumentParser:
     )
     install.add_argument("target", type=Path)
     source = install.add_mutually_exclusive_group()
-    source.add_argument("--release", help="Exact published release tag")
+    source.add_argument(
+        "--release", help="Exact published release tag (defaults to the installed version)"
+    )
     source.add_argument(
         "--candidate", action="store_true", help="Explicit unpublished development candidate"
     )
@@ -394,10 +403,21 @@ def _parser() -> argparse.ArgumentParser:
     )
     policy.add_argument("target", type=Path)
     policy.add_argument("--profile", choices=("general", "data-science"), required=True)
-    policy.add_argument("--capability", action="append", default=[])
-    policy_source = policy.add_mutually_exclusive_group(required=True)
-    policy_source.add_argument("--release")
-    policy_source.add_argument("--candidate", action="store_true")
+    policy.add_argument(
+        "--capability",
+        action="append",
+        default=[],
+        help=(
+            "Explicit capability (data-science defaults to its required capabilities when omitted)"
+        ),
+    )
+    policy_source = policy.add_mutually_exclusive_group()
+    policy_source.add_argument(
+        "--release", help="Exact published release tag (defaults to the installed version)"
+    )
+    policy_source.add_argument(
+        "--candidate", action="store_true", help="Explicit unpublished development candidate"
+    )
     policy.add_argument("--apply", action="store_true")
     policy.add_argument("--approve-plan")
 
@@ -437,13 +457,19 @@ def main() -> None:
     args = _parser().parse_args()
     if args.command == "change-policy":
         from .installation import transition_project_policy
+        from .project_policy import PROFILE_REQUIRED_CAPABILITIES
 
+        capabilities = (
+            list(args.capability)
+            if args.capability
+            else list(PROFILE_REQUIRED_CAPABILITIES[args.profile])
+        )
         _emit_result(
             transition_project_policy(
                 args.target,
                 profile=args.profile,
-                capabilities=args.capability,
-                release=args.release,
+                capabilities=capabilities,
+                release=_release_target(args),
                 candidate=args.candidate,
                 apply=args.apply,
                 approve_plan=args.approve_plan,
@@ -478,7 +504,7 @@ def main() -> None:
                 )
                 install_result = install_project(
                     args.target,
-                    release=args.release,
+                    release=_release_target(args),
                     candidate=args.candidate,
                     commands=commands,
                     initialize=args.initialize,
