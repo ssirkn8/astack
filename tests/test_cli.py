@@ -553,14 +553,16 @@ def test_run_delivers_process_group_sigint_to_workflow_without_wrapper_traceback
 ) -> None:
     import signal
 
+    # Use raw fd writes instead of print() so SIGINT arriving before print() releases
+    # stdout's lock cannot trigger a reentrant BufferedWriter RuntimeError.
     _write_fake_workflow(
         tmp_path,
-        "import signal, sys, time\n"
+        "import os, signal, time\n"
         "def handle(_signum, _frame):\n"
-        "    print('workflow-handled-sigint', flush=True)\n"
+        "    os.write(1, b'workflow-handled-sigint\\n')\n"
         "    raise SystemExit(42)\n"
         "signal.signal(signal.SIGINT, handle)\n"
-        "print('ready', flush=True)\n"
+        "os.write(1, b'ready\\n')\n"
         "time.sleep(10)\n",
     )
 
@@ -582,6 +584,6 @@ def test_run_delivers_process_group_sigint_to_workflow_without_wrapper_traceback
             proc.kill()
             proc.wait()
 
-    assert proc.returncode == 42
+    assert proc.returncode == 42, f"stdout={stdout!r} stderr={stderr!r}"
     assert stdout.strip() == "workflow-handled-sigint"
     assert stderr == ""
