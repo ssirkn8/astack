@@ -20,9 +20,11 @@ just check                     # lockfile, format, lint, types, and fast tests
 just ship-ready                # full strict audit before opening a PR
 ```
 
-Open `my-study` in your agent and start working. Note that `astack run` requires `main` (or a release after `v0.1.0`). On `v0.1.0`, run `uv run --locked python .astack/workflow.py <cmd>` from the project root in uv projects (or `python .astack/workflow.py <cmd>` in non-uv projects). To add astack to an existing repository in any language, see [Getting started](docs/getting-started.md#installing-into-an-existing-repository).
+Open `my-study` in your agent and start working. To add astack to an existing repository in any language, see [Getting started](docs/getting-started.md#installing-into-an-existing-repository).
 
 ## The daily loop
+
+Use `just` for project-owned daily shortcuts, and `astack run` for any command in the vendored astack runtime.
 
 | Command | What it does |
 | --- | --- |

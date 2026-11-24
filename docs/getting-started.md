@@ -8,7 +8,7 @@ astack has three moving parts:
 | The project runtime | A self-contained copy of astack's checks vendored into your repo so checks work offline and without the CLI installed. | `.astack/workflow.py` in your project |
 | Skills | Markdown instructions read by coding agents (astack skills plus pinned upstream skills). | Mirrored across `.agents/`, `.claude/`, and `.opencode/` |
 
-Inside any astack project, run `astack run <subcommand>` to invoke the project runtime. It delegates directly to the enclosing repository's `.astack/workflow.py` (and uses the synced `.venv` Python in Data Science projects). On machines without astack installed (or on `v0.1.0`), run `uv run --locked python .astack/workflow.py <subcommand>` from the project root in uv projects (or `python .astack/workflow.py <subcommand>` in non-uv projects).
+Inside any astack project, run `astack run <subcommand>` to invoke the project runtime. It delegates directly to the enclosing repository's `.astack/workflow.py` (and uses the synced `.venv` Python in Data Science projects). On machines without astack installed (such as CI), run `uv run --locked python .astack/workflow.py <subcommand>` from the project root in uv projects (or `python .astack/workflow.py <subcommand>` in non-uv projects).
 
 ## Creating a new data science project
 
@@ -46,22 +46,21 @@ astack records the checksum of every file it installs in `.astack/manifest.json`
 | Owner-owned | `AGENTS.md`, `README.md`, `pyproject.toml`, `.astack/project.toml`, `data/sources.yml`, `docs/`, `src/`, `tests/` | Never modified by astack after creation. |
 | Unknown | Any file astack did not create | Never claimed or overwritten, even if identical to a managed file. |
 
-Put project-specific agent instructions in `AGENTS.md`. Every supported harness reads `AGENTS.md` (including Claude Code), so astack does not create a `CLAUDE.md` and leaves any existing `CLAUDE.md` untouched. If an older repository has both files, move unique rules into `AGENTS.md` and either delete `CLAUDE.md` or replace it with a single line `@AGENTS.md` for older Claude Code versions.
+Put project-specific agent instructions in `AGENTS.md`. Every supported harness reads `AGENTS.md` (including Claude Code), so astack does not create a `CLAUDE.md` and leaves any existing `CLAUDE.md` untouched.
 
 ## Installing into an existing repository
 
 Use `astack install` to adopt astack in an existing software or hybrid repository in any language. It adds `.astack/` and managed skills without touching your source code, README, CI, dependencies, lockfiles, data, or Git history.
 
-Always run the installer from a verified commit of a published release:
-
 ```sh
-uv tool run --from 'git+https://github.com/ssirkn8/astack.git@<verified-release-commit>' \
-  astack install /path/to/project --release vX.Y.Z --check-argv '["npm", "test"]'
+astack install /path/to/project --release vX.Y.Z --check-argv '["npm", "test"]'
 ```
+
+Your installed `astack` CLI must come from that exact published release commit. To run a different release without reinstalling globally, prefix with `uv tool run --from 'git+https://github.com/ssirkn8/astack.git@<verified-release-commit>'`.
 
 - `--check-argv` tells astack your project's exact check command as a JSON array (executed without a shell). Repeat `--check-argv` if you need multiple check commands.
 - `--initialize` initializes Git and installs workflow files into an empty directory without scaffolding a Python starter template.
-- **Dry-run first, always.** `astack install` prints every proposed path, source identity, ownership decision, conflict, and a plan digest without writing anything. Apply by rerunning with the exact same arguments plus `--apply --approve-plan <digest>`. Any change to files, Git state, checks, or release source invalidates the digest and refuses to apply.
+- **Dry-run first, always.** `astack install` prints every proposed path, source identity, ownership decision, conflict, and a SHA-256 `plan_digest` without writing anything. Apply by rerunning with the exact same arguments plus `--apply --approve-plan <plan_digest>` using the `plan_digest` printed by the dry run. Any change to files, Git state, checks, or release source invalidates that digest and refuses to apply.
 - Ordinary work in a General project uses only Python's standard library (DVC metadata checks require PyYAML). Because `astack install` adds no `justfile`, run the strict audit with `astack run audit --strict --run-tools`.
 - Maintainers testing unpublished changes against disposable repositories must pass `--candidate` instead of `--release`. Candidate mode records candidate status without claiming a published release.
 
@@ -73,10 +72,10 @@ Upgrade an existing project to an exact published release from inside the projec
 astack run upgrade vX.Y.Z
 ```
 
-That resolves the exact published release and runs its installer as a dry run. Inspect the plan, then apply with:
+That resolves the exact published release and runs its installer as a dry run, printing a SHA-256 `plan_digest` for the proposed changes. Inspect the plan, then apply with that exact `plan_digest`:
 
 ```sh
-astack run upgrade vX.Y.Z --apply --approve-plan <digest>
+astack run upgrade vX.Y.Z --apply --approve-plan <plan_digest>
 ```
 
 Safety rules:
@@ -84,7 +83,7 @@ Safety rules:
 - Any edited managed file blocks the upgrade so your changes are never silently lost.
 - An older astack release never rewrites a project installed by a newer release. Roll back with Git instead.
 - Each apply holds a short-lived lock and writes a transaction journal, verifying written bytes before updating `.astack/version` and the manifest.
-- If an install or upgrade is interrupted, the journal blocks future installs until recovered. Inspect the recovery plan with `astack install /path/to/project --recover` and apply with its printed `--approve-plan <digest>`. Recovery restores only recorded workflow paths, preserves independent application edits, and refuses changed workflow files, unknown ownership, or an active/unknown lock owner. (On Windows, lock-owner liveness cannot be verified and therefore blocks automatic lock recovery.)
+- If an install or upgrade is interrupted, the journal blocks future installs until recovered. Inspect the recovery plan with `astack install /path/to/project --recover` and apply with its printed `--approve-plan <plan_digest>`. Recovery restores only recorded workflow paths, preserves independent application edits, and refuses changed workflow files, unknown ownership, or an active/unknown lock owner. (On Windows, lock-owner liveness cannot be verified and therefore blocks automatic lock recovery.)
 
 ## Switching profiles (`astack change-policy`)
 
@@ -94,18 +93,17 @@ Every project shares the same runtime and `.astack/project.toml`. Choose a profi
 - **`general` with scientific capabilities**: mainly software that also produces scientific outputs. Keeps your language, layout, and checks while opting into `scientific-review`, `scientific-validation`, or `[review] scientific_paths`.
 - **Plain `general`**: ordinary software making no scientific claims. Science checks stay `not-assessed`, never `pass`.
 
-Switch profile or capabilities later using the same dry-run and digest approval flow:
+Switch profile or capabilities later using the same dry-run and `plan_digest` approval flow:
 
 ```sh
-uv tool run --from 'git+https://github.com/ssirkn8/astack.git@<verified-release-commit>' \
-  astack change-policy /path/to/project \
+astack change-policy /path/to/project \
   --release vX.Y.Z \
   --profile data-science \
   --capability scientific-review \
   --capability scientific-validation
 ```
 
-Then apply with `--apply --approve-plan <digest>`.
+As with `install`, your installed CLI must match that published release commit (or prefix with `uv tool run --from 'git+https://github.com/ssirkn8/astack.git@<verified-release-commit>'`). Apply with `--apply --approve-plan <plan_digest>` using the `plan_digest` printed by the preview.
 
 What `change-policy` does and does not do:
 

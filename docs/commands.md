@@ -4,14 +4,14 @@ Every public command you can run with the `astack` CLI, inside a generated proje
 
 ## `astack` CLI
 
-Installed once on your machine (`uv tool install 'git+https://github.com/ssirkn8/astack'`, or pin a published tag after `v0.1.0` for `astack run`). On `v0.1.0`, run `uv run --locked python .astack/workflow.py <subcommand>` from the project root in uv projects (or `python .astack/workflow.py <subcommand>` in non-uv projects).
+Installed once on your machine (`uv tool install 'git+https://github.com/ssirkn8/astack'`).
 
 | Command | Purpose |
 | --- | --- |
 | `astack --version` | Print the installed astack version. |
 | `astack new <dir>` | Create a Data Science project (interactive prompts in a terminal, or pass `--name`, `--package`, `--description`, `--intended-use`, `--tool quarto`, `--no-dvc`, `--no-git`). |
-| `astack install <dir>` | Adopt or upgrade an existing repository. Dry-run by default. Accepts `--release <tag>` or `--candidate`, `--check-argv <json>`, `--initialize`, `--recover`, and `--apply --approve-plan <digest>`. |
-| `astack change-policy <dir>` | Switch profile (`--profile general\|data-science`) or `--capability` flags. Dry-run by default. Requires `--release <tag>` or `--candidate`, applied with `--apply --approve-plan <digest>`. |
+| `astack install <dir>` | Adopt or upgrade an existing repository. Dry-run by default. Accepts `--release <tag>` or `--candidate`, `--check-argv <json>`, `--initialize`, `--recover`, and `--apply --approve-plan <plan_digest>`. |
+| `astack change-policy <dir>` | Switch profile (`--profile general\|data-science`) or `--capability` flags. Dry-run by default. Requires `--release <tag>` or `--candidate`, applied with `--apply --approve-plan <plan_digest>`. |
 | `astack doctor --harness <name>` | Read-only check that tools, skill files, and config are in place for `claude-code`, `codex`, `opencode`, or `pi` (optional `--root <dir>`). |
 | `astack skills` | Verify pinned upstream skills, or copy them outside a project with `--dest <dir>` (dry-run) and `--apply`. |
 | `astack run <subcommand> [args...]` | Forward a workflow subcommand to the enclosing project's `.astack/workflow.py` (uses the synced `.venv` Python in Data Science projects). |
@@ -55,7 +55,7 @@ Added automatically by default or optional tools selected during `astack new`:
 
 ## Project runtime commands (`astack run`)
 
-Run these from anywhere inside an astack project. Every command delegates to `.astack/workflow.py`. On a machine without the `astack` CLI installed (such as CI) or on `v0.1.0`, run from the project root with `uv run --locked python .astack/workflow.py <subcommand>` in uv projects (or `python .astack/workflow.py <subcommand>` in non-uv projects).
+Run these from anywhere inside an astack project. Every command delegates to `.astack/workflow.py`. On a machine without the `astack` CLI installed (such as CI), run from the project root with `uv run --locked python .astack/workflow.py <subcommand>` in uv projects (or `python .astack/workflow.py <subcommand>` in non-uv projects).
 
 | Command | Purpose |
 | --- | --- |
@@ -73,6 +73,6 @@ Run these from anywhere inside an astack project. Every command delegates to `.a
 | `astack run share-raw [--apply]` | Preview or link read-only `data/raw/` from the canonical checkout into a linked Git worktree. |
 | `astack run export-public --out <dir>` | Write an allowlisted, secret-scanned, history-free public export of the committed project. |
 | `astack run file-audit --report <path> --commit <sha> --scope <scope> --actionable-count <n> [--to auto\|github\|local\|none] [--remove-on-success]` | File an audit report as a GitHub issue, or keep it locally when GitHub is unavailable. |
-| `astack run upgrade <tag> [--apply --approve-plan <digest>]` | Fetch an exact published astack release and plan or apply a checksum-safe upgrade. |
+| `astack run upgrade <tag> [--apply --approve-plan <plan_digest>]` | Fetch an exact published astack release and plan or apply a checksum-safe upgrade. |
 | `astack run dvc-status` | Show DVC pipeline status (DVC projects only). |
 | `astack run dvc-cache <status \| gc [--apply]>` | Inspect or garbage-collect the project's DVC cache (DVC projects only). |
