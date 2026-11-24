@@ -1,79 +1,54 @@
 # Validation Tiers
 
-Use the validation tiers to separate routine development checks from representative scientific
-verification and expensive material reconstruction.
+astack separates fast daily checks from representative scientific verification and expensive full-project release gates. One rule applies at every tier:
+
+**Missing, skipped, unavailable, or failed commands never count as a pass.**
 
 ## CHECK
 
-Run `just check` for the fast locked-environment, formatting, linting, typing, non-integration,
-configuration, and selected capability checks. Tests marked `integration` run through the explicit
-`just integration` target instead. This is the default pull request gate. It does not establish
-scientific validity.
+Run `just check` on every edit for locked-environment sync, formatting, linting, type checking, and fast non-integration tests. In projects with Marimo, `astack run validate check` also runs `just review-check`.
 
-CI and any project gate that requires the complete test suite should run both `just check` and
-`just integration`. `just test-split` proves that the collected tests are partitioned between the
-two gates. Keep integration coverage explicit rather than silently skipping it. A project with no
-integration-marked tests has a valid empty integration tier, but a declared integration test must
-run and fail the complete gate when it fails.
+Keep slow tests marked `integration` out of `just check` and run them with `just integration`. Run `just test-split` to confirm every test belongs to either fast tests or `integration`. An empty integration tier is valid when no integration tests exist, while any declared integration test must pass in the complete gate.
 
-The reference budgets are 90 seconds for the fast gate, 480 seconds for the integration gate, and
-600 seconds for the complete shipping gate. `ValidationSession` enforces the configured budgets
-and records timing evidence. Unavailable or failed validation commands are never passes.
-
-### What `just ship-ready` reports
-
-`software_checks` says whether `just check` and `just integration` ran and passed. It is not
-reproduction evidence. `computational_reproducibility` stays `not-assessed` while
-`analysis.stage` is `exploratory`, and release readiness stays `not-assessed` until reproducibility
-passes. An exploratory project is ship-ready when its software checks pass. A material project is
-ship-ready only when computational reproducibility passes.
+Passing `CHECK` proves engineering checks ran cleanly. It does not prove pipeline reproduction or scientific validity.
 
 ## VERIFY
 
-Validation reuses already-collected timing evidence for a bounded, versioned local diagnostic
-history in the shared Git-common workflow state directory. It adds no benchmark, model call,
-network request, prompt, score, or shipping gate. History survives ordinary worktree cleanup.
-Audit JSON can expose `optimization_observations`, distinguishing unavailable
-or insufficient evidence from descriptive observations and recurring patterns. Diagnostic
-records exclude commands, errors, arbitrary output, dataset contents, prompts, and local paths.
-Keep `just validation-benchmark` an explicit experiment where available, never routine overhead.
-
-VERIFY is an opt-in integration tier for representative multi-step paths. Prefer tiny fixtures and
-reusable logic under `src/` over a notebook-only pipeline. Declare one or more direct command arrays
-in `.astack/project.toml`:
+`VERIFY` is an opt-in tier for representative multi-step scientific checks on tiny fixtures (preferring reusable code in `src/` over notebook-only logic). Declare direct command arrays under `[validation]` in `.astack/project.toml`:
 
 ```toml
 [validation]
 verify = [["uv", "run", "--locked", "pytest", "-m", "verify"]]
 ```
 
-Run `just verify`. Leave this tier undeclared when the project has no applicable integration path.
-Declared VERIFY commands also run as part of `validate check`. While the tier is undeclared, the
-CHECK result reports VERIFY as `not-run`, which is never a pass, and `just verify` fails.
-`just ship-ready` runs declared VERIFY too. Undeclared, it blocks once `analysis.stage` is
-`material`.
+Run it with `just verify` (or `astack run validate verify`). When declared, `VERIFY` also runs during `astack run validate check` and strict `just ship-ready`.
+
+While `verify` is undeclared, `CHECK` reports `VERIFY` as `not-run` (never a pass) and `just verify` fails. Undeclared `VERIFY` is advisory during `exploratory` work and blocks `just ship-ready` once `analysis.stage` is `material`.
 
 ## RELEASE
 
-RELEASE is an opt-in material-work tier for full reconstruction, durable evidence, and strict output
-checks. It is not part of the default pull request gate and requires a clean worktree.
+`RELEASE` is an opt-in gate for full reconstruction, strict auditing, and human code sign-off. It requires a clean Git worktree and never runs in default PR CI.
 
 ```toml
 [validation]
 release = [
   ["just", "reproduce", "--verify"],
-  ["uv", "run", "--locked", "python", ".astack/workflow.py", "audit", "--format", "text", "--run-tools", "--strict"],
+  ["astack", "run", "audit", "--format", "text", "--run-tools", "--strict"],
+  ["astack", "run", "review-status", "--require-reviewed"],
 ]
 ```
 
-Run `just release`. Missing, skipped, unavailable, or failed commands never count as a passing
-tier. Keep durable machine evidence in `evidence/<component>/` and human-facing figures and tables
-in their component-scoped report directories.
+Run it with `just release` (or `astack run validate release`). On a machine without the `astack` CLI installed, replace `["astack", "run", ...]` with `["uv", "run", "--locked", "python", ".astack/workflow.py", ...]`. Keep durable machine evidence in `evidence/<component>/` and human-facing figures and tables under `reports/`.
 
-## Committed-history privacy
+## Local vs. CI Runs
 
-Declare project-specific private locations in `.astack/project.toml` when they must be absent from all
-reachable Git history:
+- **Local (`just ship-ready`):** runs `CHECK`, `just integration`, configured capability checks, and the strict audit in one session (writing timing records under gitignored `.cache/validation/`). `software_checks` covers `just check` and `just integration` only. `computational_reproducibility` stays `not-assessed` while `analysis.stage` is `exploratory` and must pass once `analysis.stage` is `material`.
+- **Default PR CI:** runs `just ship-ready` (which runs `VERIFY` only when you declare it) and never runs `just release`.
+- **Local-only data CI (`just ci-check`):** when private inputs cannot leave your machine, never upload restricted data for CI. Set `[ci] mode = "local-only-sources"` in `.astack/project.toml`, mark unavailable entries `availability: local_only` in `data/sources.yml`, and run `just ci-check` in `.github/workflows/checks.yml`. Local strict `just ship-ready` remains required before shipping material results.
+
+## Committed-History Privacy
+
+Declare project-specific private paths in `.astack/project.toml` when they must never appear anywhere in reachable Git history:
 
 ```toml
 [privacy]
@@ -81,7 +56,4 @@ private_history_paths = ["client-private", "notes/internal.txt"]
 private_history_safe_paths = ["client-private/README.md"]
 ```
 
-Private roots match descendants by path component. Safe paths match exactly, never as a directory or
-prefix. Paths must be relative, normalized, and free of `.` or `..` components. Invalid policy and
-unavailable history are blocking findings. This policy is independent of credential scanning and
-`data/raw` immutability checks, and omitted policy preserves the default behavior.
+Private roots match all descendants by path component. Safe paths match exact files only, never a directory or prefix. Paths must be relative, normalized, and free of `.` or `..` segments. Invalid policy or unavailable Git history blocks the audit. This check supplements credential scanning and `data/raw/` immutability checks without modifying existing history.

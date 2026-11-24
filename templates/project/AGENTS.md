@@ -1,26 +1,27 @@
 # Project instructions
 
-This project uses astack. Put your own rules here; astack upgrades never change this file.
+This project uses astack. Put your own rules here. astack upgrades never change this file.
 
 ## Where things are
 
-- `.astack/` holds the workflow runtime and its manifest. astack manages these files; do not edit
-  them. `.astack/project.toml` is yours: profile, tools, and validation commands.
-- Skills live in `.opencode/skills/`, with copies where each agent looks (`.agents/`, `.claude/`).
-- Upgrade with `/astack-upgrade <tag>` or `python .astack/workflow.py upgrade <tag>`. It is a dry
-  run until a person approves the exact plan.
+- `.astack/` holds the workflow runtime and its manifest. astack manages these files, so do not
+  edit them. `.astack/project.toml` is yours: profile, tools, and validation commands.
+- Managed skills live in `.agents/skills/`, `.claude/skills/`, and `.opencode/skills/` so each
+  agent can discover them. Do not edit managed skill files directly.
+- Upgrade with `/astack-upgrade [<tag>]` or `astack run upgrade [<tag>]` (defaults to the latest
+  release). It is a dry run until a person approves the exact plan.
 
 ## How we work
 
 - One coherent change per branch and PR. Link the GitHub issue with `Closes #N`. If GitHub is
   unavailable, use one file in `docs/work-items/` instead.
 - Plan larger work with `/to-spec`, then split it with `/to-tickets`. Both file issues in this
-  repository's GitHub tracker (`gh`) labelled `ready-for-agent`. Without GitHub, write one file per
+  repository's GitHub tracker (`gh`) labeled `ready-for-agent`. Without GitHub, write one file per
   ticket in `docs/work-items/`, not `.scratch/`.
 - Issue labels: `bug`, `enhancement`, or `documentation` for the kind of work, `ready-for-agent`
   (an agent can pick it up), `upstream` (blocked outside the project), and `needs-decision` (a
-  person must decide first; PRs too). Create a missing one with `gh label create`. Add no others
-  unless the project already uses them or a person asks.
+  person must decide first, including on PRs). Create a missing one with `gh label create`. Add no
+  others unless the project already uses them or a person asks.
 - When to stop and ask a person is set by `.opencode/skills/human-decisions/SKILL.md`.
 - When you verified a change by looking at it, follow `.opencode/skills/pr-visuals/SKILL.md` to
   decide whether the PR should show an image. Most PRs need none.
@@ -33,9 +34,9 @@ This project uses astack. Put your own rules here; astack upgrades never change 
 ## Data
 
 - Never change or delete files under `data/raw/`. Record every source in `data/sources.yml`, with
-  its licence, sensitivity, and a SHA-256 checksum or verifiable identity.
-- In a linked worktree, run `python .astack/workflow.py share-raw`, then `--apply`, to share raw
-  inputs. Everything else (interim and processed data, reports, scratch) stays in each worktree.
+  its license, sensitivity, and a SHA-256 checksum or verifiable identity.
+- In a linked worktree, run `astack run share-raw`, then `astack run share-raw --apply`, to share
+  raw inputs. Everything else (interim and processed data, reports, scratch) stays in each worktree.
 
 ## Science
 
@@ -43,11 +44,11 @@ This project uses astack. Put your own rules here; astack upgrades never change 
   figures to `reports/figures/<component>/`, and tables to `reports/tables/<component>/`.
 - Passing tests do not make an analysis valid. Check sampling, missingness, leakage, dependence,
   uncertainty, and sensitivity where they apply, and say what a person still needs to review.
-- Scientific outputs are opt-in; never declare them on your own. When the project declares them,
+- Scientific outputs are opt-in, so never declare them on your own. When the project declares them,
   follow `/ds-output-contract`: agree the Scientific Output Contract with a person before
-  substantial work (headline outputs and required validation; optional diagnostics may wait), put
-  one `Analysis: <key>` line in each ticket or PR that creates or changes declared outputs, and run
-  `just ship-ready <key>` before that PR. Deadline pressure never permits required validation to
+  substantial work (headline outputs and required validation, while optional diagnostics may wait),
+  put one `Analysis: <key>` line in each ticket or PR that creates or changes declared outputs, and
+  run `just ship-ready <key>` before that PR. Deadline pressure never permits required validation to
   be skipped.
 - Only a person signs off code, from `just review`. Never call `record_review` or
   `revoke_review`, or write under `.astack/reviews/`. Review requests on a change belong in its PR.
@@ -57,7 +58,8 @@ This project uses astack. Put your own rules here; astack upgrades never change 
 ## Checks
 
 - `just check` while working, `just integration` for integration tests, and `just ship-ready`
-  before opening a PR. `just acquire` fetches inputs; `just reproduce` reruns the declared pipeline.
+  before opening a PR. `just acquire` fetches inputs, and `just reproduce` reruns the declared
+  pipeline.
 - For a material pipeline, declare `[reproduction].outputs`. Exit code 0 is only
   `command-succeeded`. Commit, record a reference with `just reproduce --promote`, commit that,
   and rerun: only a matching rerun is `verified`. `just ship-ready` needs a verified record that
