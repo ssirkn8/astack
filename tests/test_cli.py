@@ -587,3 +587,167 @@ def test_run_delivers_process_group_sigint_to_workflow_without_wrapper_traceback
     assert proc.returncode == 42, f"stdout={stdout!r} stderr={stderr!r}"
     assert stdout.strip() == "workflow-handled-sigint"
     assert stderr == ""
+
+
+def test_install_defaults_release_to_installed_version_and_keeps_mutual_exclusion(
+    tmp_path: Path, monkeypatch, capsys
+) -> None:
+    from astack import installation
+
+    captured: dict[str, object] = {}
+
+    def fake_install(target: Path, **kwargs: object) -> dict[str, object]:
+        captured.clear()
+        captured.update({"target": target, **kwargs})
+        return {"status": "dry-run"}
+
+    monkeypatch.setattr(installation, "install_project", fake_install)
+    target = tmp_path / "repo"
+
+    monkeypatch.setattr(sys, "argv", ["astack", "install", str(target)])
+    cli.main()
+    assert captured["target"] == target
+    assert captured["release"] == f"v{cli.workflow_version()}"
+    assert captured["candidate"] is False
+    assert json.loads(capsys.readouterr().out)["status"] == "dry-run"
+
+    # Explicit empty --release must pass through verbatim so `_source_identity` rejects it.
+    monkeypatch.setattr(sys, "argv", ["astack", "install", str(target), "--release", ""])
+    cli.main()
+    assert captured["release"] == ""
+    assert captured["candidate"] is False
+    capsys.readouterr()
+
+    with pytest.raises(SystemExit) as error:
+        cli._parser().parse_args(["install", str(target), "--release", "v1.0.0", "--candidate"])
+    assert error.value.code == 2
+
+
+def test_install_default_release_still_verifies_commit_identity(
+    tmp_path: Path, monkeypatch, capsys
+) -> None:
+    from astack import installation
+
+    source_root = tmp_path / "source"
+    source_root.mkdir()
+    target = tmp_path / "empty-target"
+    expected_version = cli.workflow_version()
+    resolved_tags: list[str] = []
+
+    def fake_resolve(tag: str) -> dict[str, str]:
+        resolved_tags.append(tag)
+        return {"tag": tag, "commit": "a" * 40, "release_id": "42"}
+
+    monkeypatch.setattr(installation, "repository_root", lambda: source_root)
+    monkeypatch.setattr(installation, "workflow_version", lambda _root=None: expected_version)
+    monkeypatch.setattr(installation, "resolve_release", fake_resolve)
+    monkeypatch.setattr(installation, "_source_commit", lambda _root: "b" * 40)
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        ["astack", "install", str(target), "--initialize", "--check-argv", json.dumps(["true"])],
+    )
+
+    with pytest.raises(SystemExit) as error:
+        cli.main()
+
+    assert error.value.code == 1
+    assert resolved_tags == [f"v{expected_version}"]
+    assert "exact published commit" in capsys.readouterr().err
+
+
+def test_install_recover_works_without_release_or_candidate(
+    tmp_path: Path, monkeypatch, capsys
+) -> None:
+    from astack import installation
+
+    recovered: dict[str, object] = {}
+
+    def fake_recover(target: Path, **kwargs: object) -> dict[str, object]:
+        recovered.update({"target": target, **kwargs})
+        return {"status": "dry-run"}
+
+    def fail_install(*args: object, **kwargs: object) -> dict[str, object]:
+        raise AssertionError("install_project should not run during --recover")
+
+    monkeypatch.setattr(installation, "recover_installation", fake_recover)
+    monkeypatch.setattr(installation, "install_project", fail_install)
+    target = tmp_path / "repo"
+    monkeypatch.setattr(sys, "argv", ["astack", "install", str(target), "--recover"])
+
+    cli.main()
+
+    assert recovered == {"target": target, "apply": False, "approve_plan": None}
+    assert json.loads(capsys.readouterr().out)["status"] == "dry-run"
+
+
+def test_change_policy_defaults_release_and_data_science_capabilities(
+    tmp_path: Path, monkeypatch, capsys
+) -> None:
+    from astack import installation
+
+    captured: dict[str, object] = {}
+
+    def fake_transition(target: Path, **kwargs: object) -> dict[str, object]:
+        captured.clear()
+        captured.update({"target": target, **kwargs})
+        return {"status": "dry-run"}
+
+    monkeypatch.setattr(installation, "transition_project_policy", fake_transition)
+    target = tmp_path / "repo"
+
+    monkeypatch.setattr(
+        sys, "argv", ["astack", "change-policy", str(target), "--profile", "data-science"]
+    )
+    cli.main()
+    assert captured["target"] == target
+    assert captured["profile"] == "data-science"
+    assert captured["capabilities"] == ["scientific-review", "scientific-validation"]
+    assert captured["release"] == f"v{cli.workflow_version()}"
+    assert captured["candidate"] is False
+    capsys.readouterr()
+
+    monkeypatch.setattr(
+        sys, "argv", ["astack", "change-policy", str(target), "--profile", "general"]
+    )
+    cli.main()
+    assert captured["profile"] == "general"
+    assert captured["capabilities"] == []
+    assert captured["release"] == f"v{cli.workflow_version()}"
+    assert captured["candidate"] is False
+    capsys.readouterr()
+
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "astack",
+            "change-policy",
+            str(target),
+            "--profile",
+            "data-science",
+            "--capability",
+            "scientific-review",
+            "--candidate",
+        ],
+    )
+    cli.main()
+    assert captured["profile"] == "data-science"
+    assert captured["capabilities"] == ["scientific-review"]
+    assert captured["release"] is None
+    assert captured["candidate"] is True
+    capsys.readouterr()
+
+    with pytest.raises(SystemExit) as error:
+        cli._parser().parse_args(
+            [
+                "change-policy",
+                str(target),
+                "--profile",
+                "data-science",
+                "--release",
+                "v1.0.0",
+                "--candidate",
+            ]
+        )
+    assert error.value.code == 2

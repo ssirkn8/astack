@@ -8,7 +8,11 @@ import tomllib
 from pathlib import Path
 from typing import Any
 
-PROFILES = ("general", "data-science")
+PROFILE_REQUIRED_CAPABILITIES: dict[str, tuple[str, ...]] = {
+    "general": (),
+    "data-science": ("scientific-review", "scientific-validation"),
+}
+PROFILES = tuple(PROFILE_REQUIRED_CAPABILITIES)
 VALIDATION_TIERS = ("check", "verify", "release")
 
 
@@ -26,9 +30,8 @@ def validate_project_config(config: dict[str, Any]) -> dict[str, Any]:
         raise ValueError("Project capabilities must be a list of strings")
     if len(capabilities) != len(set(capabilities)):
         raise ValueError("Project capabilities must be unique")
-    if profile == "data-science" and not {"scientific-review", "scientific-validation"}.issubset(
-        capabilities
-    ):
+    required = PROFILE_REQUIRED_CAPABILITIES[profile]
+    if required and not set(required).issubset(capabilities):
         raise ValueError("Data Science requires scientific review and validation capabilities")
     if "schema_version" in config and (
         type(config["schema_version"]) is not int or config["schema_version"] != 1
