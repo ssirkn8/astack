@@ -751,3 +751,161 @@ def test_change_policy_defaults_release_and_data_science_capabilities(
             ]
         )
     assert error.value.code == 2
+
+
+def test_doctor_cli_allows_omitting_harness_and_rejects_t3_code(
+    tmp_path: Path, monkeypatch, capsys
+) -> None:
+    from astack import environment
+
+    calls: list[tuple[Path, str | None]] = []
+
+    def fake_doctor(root: Path, harness: str | None = None) -> dict[str, object]:
+        calls.append((root, harness))
+        return {
+            "root": str(root),
+            "harness": harness,
+            "status": "READY",
+            "checks": [
+                {
+                    "id": "harness-pi",
+                    "required": False,
+                    "status": "NOT INSTALLED",
+                    "capability": "harness",
+                    "recovery": "Install pi if you use it",
+                    "summary": "pi not found on PATH",
+                }
+            ],
+        }
+
+    monkeypatch.setattr(environment, "doctor", fake_doctor)
+    monkeypatch.setattr(sys, "argv", ["astack", "doctor", "--root", str(tmp_path)])
+    cli.main()
+    streams = capsys.readouterr()
+    assert calls[-1] == (tmp_path.resolve(), None)
+    assert json.loads(streams.out)["status"] == "READY"
+    assert "harness-pi: NOT INSTALLED" in streams.err
+
+    monkeypatch.setattr(
+        sys, "argv", ["astack", "doctor", "--root", str(tmp_path), "--harness", "claude-code"]
+    )
+    cli.main()
+    capsys.readouterr()
+    assert calls[-1] == (tmp_path.resolve(), "claude-code")
+
+    with pytest.raises(SystemExit) as error:
+        cli._parser().parse_args(["doctor", "--harness", "t3-code"])
+    assert error.value.code == 2
+
+
+def test_install_check_flag_splits_argv_without_shell_and_combines_with_check_argv(
+    tmp_path: Path, monkeypatch, capsys
+) -> None:
+    from astack import installation
+
+    captured: dict[str, object] = {}
+
+    def fake_install(target: Path, **kwargs: object) -> dict[str, object]:
+        captured.clear()
+        captured.update({"target": target, **kwargs})
+        return {"status": "dry-run"}
+
+    monkeypatch.setattr(installation, "install_project", fake_install)
+    target = tmp_path / "repo"
+
+    monkeypatch.setattr(sys, "argv", ["astack", "install", str(target), "--check", "npm test"])
+    cli.main()
+    capsys.readouterr()
+    assert captured["commands"] == [["npm", "test"]]
+
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "astack",
+            "install",
+            str(target),
+            "--check",
+            "python -c 'print(1 + 1)'",
+            "--check-argv",
+            json.dumps(["ruff", "check", "."]),
+            "--check",
+            'pytest -k "fast and clean"',
+        ],
+    )
+    cli.main()
+    capsys.readouterr()
+    assert captured["commands"] == [
+        ["python", "-c", "print(1 + 1)"],
+        ["ruff", "check", "."],
+        ["pytest", "-k", "fast and clean"],
+    ]
+
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        ["astack", "install", str(target), "--check-argv", json.dumps(["cargo", "test"])],
+    )
+    cli.main()
+    capsys.readouterr()
+    assert captured["commands"] == [["cargo", "test"]]
+
+
+@pytest.mark.parametrize("bad_check", ["", "   ", 'npm "test', '"" arg'])
+def test_install_check_flag_rejects_empty_and_malformed_values(
+    tmp_path: Path, monkeypatch, capsys, bad_check: str
+) -> None:
+    from astack import installation
+
+    def fail_install(*args: object, **kwargs: object) -> dict[str, object]:
+        raise AssertionError("install_project should not run for invalid --check")
+
+    monkeypatch.setattr(installation, "install_project", fail_install)
+    monkeypatch.setattr(sys, "argv", ["astack", "install", str(tmp_path), "--check", bad_check])
+
+    with pytest.raises(SystemExit) as error:
+        cli.main()
+
+    assert error.value.code == 1
+    assert "Invalid --check command" in capsys.readouterr().err
+
+
+def test_install_and_change_policy_default_target_to_current_directory(monkeypatch, capsys) -> None:
+    from astack import installation
+
+    install_captured: dict[str, object] = {}
+    recover_captured: dict[str, object] = {}
+    policy_captured: dict[str, object] = {}
+
+    def fake_install(target: Path, **kwargs: object) -> dict[str, object]:
+        install_captured.update({"target": target, **kwargs})
+        return {"status": "dry-run"}
+
+    def fake_recover(target: Path, **kwargs: object) -> dict[str, object]:
+        recover_captured.update({"target": target, **kwargs})
+        return {"status": "dry-run"}
+
+    def fake_transition(target: Path, **kwargs: object) -> dict[str, object]:
+        policy_captured.update({"target": target, **kwargs})
+        return {"status": "dry-run"}
+
+    monkeypatch.setattr(installation, "install_project", fake_install)
+    monkeypatch.setattr(installation, "recover_installation", fake_recover)
+    monkeypatch.setattr(installation, "transition_project_policy", fake_transition)
+
+    monkeypatch.setattr(sys, "argv", ["astack", "install", "--check", "npm test"])
+    cli.main()
+    capsys.readouterr()
+    assert install_captured["target"] == Path(".")
+    assert install_captured["commands"] == [["npm", "test"]]
+
+    monkeypatch.setattr(sys, "argv", ["astack", "install", "--recover"])
+    cli.main()
+    capsys.readouterr()
+    assert recover_captured["target"] == Path(".")
+
+    monkeypatch.setattr(sys, "argv", ["astack", "change-policy", "--profile", "data-science"])
+    cli.main()
+    capsys.readouterr()
+    assert policy_captured["target"] == Path(".")
+    assert policy_captured["capabilities"] == ["scientific-review", "scientific-validation"]

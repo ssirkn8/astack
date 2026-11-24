@@ -10,9 +10,9 @@ Installed once on your machine (`uv tool install 'git+https://github.com/ssirkn8
 | --- | --- |
 | `astack --version` | Print the installed astack version. |
 | `astack new <dir>` | Create a Data Science project (interactive prompts in a terminal, or pass `--name`, `--package`, `--description`, `--intended-use`, `--tool quarto`, `--no-dvc`, `--no-git`). |
-| `astack install <dir>` | Adopt or upgrade an existing repository. Dry-run by default. Accepts `--release <tag>` or `--candidate`, `--check-argv <json>`, `--initialize`, `--recover`, and `--apply --approve-plan <plan_digest>`. |
-| `astack change-policy <dir>` | Switch profile (`--profile general\|data-science`) or `--capability` flags. Dry-run by default. Requires `--release <tag>` or `--candidate`, applied with `--apply --approve-plan <plan_digest>`. |
-| `astack doctor --harness <name>` | Read-only check that tools, skill files, and config are in place for `claude-code`, `codex`, `opencode`, or `pi` (optional `--root <dir>`). |
+| `astack install [<dir>]` | Adopt or upgrade an existing repository (`<dir>` defaults to `.`). Dry-run by default. Uses the installed version's release tag unless `--release <tag>` or `--candidate` is passed. Accepts `--check <cmd>`, `--check-argv <json>`, `--initialize`, `--recover`, and `--apply --approve-plan <plan_digest>`. |
+| `astack change-policy [<dir>]` | Switch profile (`--profile general\|data-science`) or `--capability` flags (`<dir>` defaults to `.`, and `data-science` enables its required capabilities when `--capability` is omitted). Dry-run by default. Uses the installed version's release tag unless `--release <tag>` or `--candidate` is passed, applied with `--apply --approve-plan <plan_digest>`. |
+| `astack doctor` | Read-only check of project tools, `.astack/` files, all managed skill directories, and detected harness CLIs. Pass `--harness <name>` (`claude-code`, `codex`, `opencode`, or `pi`) to check and require one harness, or `--root <dir>` to inspect another directory. |
 | `astack skills` | Verify pinned upstream skills, or copy them outside a project with `--dest <dir>` (dry-run) and `--apply`. |
 | `astack run <subcommand> [args...]` | Forward a workflow subcommand to the enclosing project's `.astack/workflow.py` (uses the synced `.venv` Python in Data Science projects). |
 
