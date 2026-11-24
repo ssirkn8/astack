@@ -355,3 +355,233 @@ def test_new_adds_dvc_unless_declined(
     cli.main()
 
     assert captured["tools"] == expected
+
+
+def _write_fake_workflow(root: Path, body: str) -> Path:
+    script = root / ".astack" / "workflow.py"
+    script.parent.mkdir(parents=True, exist_ok=True)
+    script.write_text(body, encoding="utf-8")
+    return script
+
+
+def _run_cli(*args: str, cwd: Path) -> subprocess.CompletedProcess[str]:
+    return subprocess.run(
+        [sys.executable, "-m", "astack.cli", *args],
+        cwd=cwd,
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+
+
+def test_help_includes_run_command(tmp_path: Path) -> None:
+    result = _run_cli("--help", cwd=tmp_path)
+    assert result.returncode == 0
+    for command in ("new", "install", "doctor", "change-policy", "skills", "run"):
+        assert command in result.stdout
+
+
+@pytest.mark.parametrize(
+    ("retired", "replacement"),
+    [
+        ("upgrade-release", "astack run upgrade <tag>"),
+        ("validate", "astack run validate <tier>"),
+    ],
+)
+def test_retired_workflow_commands_point_to_astack_run(
+    retired: str, replacement: str, monkeypatch
+) -> None:
+    monkeypatch.setattr(sys, "argv", ["astack", retired, "x"])
+    with pytest.raises(SystemExit) as error:
+        cli.main()
+    assert replacement in str(error.value)
+
+
+@pytest.mark.parametrize(
+    "forwarded",
+    [
+        ["validate", "--help"],
+        ["validate", "-h"],
+        ["audit", "--json", "--strict"],
+        ["upgrade", "v0.1.0", "--apply"],
+        ["--help"],
+        ["-h"],
+    ],
+)
+def test_run_forwards_arguments_and_flags_verbatim(tmp_path: Path, forwarded: list[str]) -> None:
+    _write_fake_workflow(
+        tmp_path,
+        "import json, sys\nprint(json.dumps(sys.argv[1:]))\n",
+    )
+
+    result = _run_cli("run", *forwarded, cwd=tmp_path)
+
+    assert result.returncode == 0
+    assert json.loads(result.stdout) == forwarded
+    assert result.stderr == ""
+
+
+def test_run_locates_enclosing_project_from_nested_subdirectory(tmp_path: Path) -> None:
+    _write_fake_workflow(
+        tmp_path,
+        "import json, pathlib, sys\n"
+        "print(json.dumps({'cwd': str(pathlib.Path.cwd()), 'argv': sys.argv[1:]}))\n",
+    )
+    nested = tmp_path / "src" / "pkg" / "deep"
+    nested.mkdir(parents=True)
+
+    result = _run_cli("run", "outputs", "--flag", cwd=nested)
+
+    assert result.returncode == 0
+    payload = json.loads(result.stdout)
+    assert payload == {"cwd": str(tmp_path.resolve()), "argv": ["outputs", "--flag"]}
+
+
+def test_run_preserves_exit_code_stdout_and_stderr_without_wrapping(tmp_path: Path) -> None:
+    _write_fake_workflow(
+        tmp_path,
+        "import sys\n"
+        "print('raw-stdout-line')\n"
+        "print('raw-stderr-line', file=sys.stderr)\n"
+        "raise SystemExit(42)\n",
+    )
+
+    result = _run_cli("run", "audit", cwd=tmp_path)
+
+    assert result.returncode == 42
+    assert result.stdout == "raw-stdout-line\n"
+    assert result.stderr == "raw-stderr-line\n"
+    assert "result_envelope" not in result.stdout
+    assert "result_envelope" not in result.stderr
+
+
+def test_run_outside_project_fails_cleanly_on_stderr(tmp_path: Path) -> None:
+    outside = tmp_path / "not-a-project"
+    outside.mkdir()
+
+    result = _run_cli("run", "validate", "check", cwd=outside)
+
+    assert result.returncode != 0
+    assert result.stdout == ""
+    assert ".astack/workflow.py" in result.stderr
+    assert "Traceback" not in result.stderr
+    assert "result_envelope" not in result.stderr
+
+
+def test_run_help_outside_project_prints_usage(tmp_path: Path) -> None:
+    result = _run_cli("run", "--help", cwd=tmp_path)
+
+    assert result.returncode == 0
+    assert "astack run <subcommand> [args...]" in result.stdout
+    assert result.stderr == ""
+
+
+def test_run_without_subcommand_reports_usage_error(tmp_path: Path) -> None:
+    _write_fake_workflow(tmp_path, "raise SystemExit(0)\n")
+
+    result = _run_cli("run", cwd=tmp_path)
+
+    assert result.returncode == 2
+    assert result.stdout == ""
+    assert "usage: astack run <subcommand> [args...]" in result.stderr
+    assert "missing subcommand" in result.stderr
+
+
+def test_workflow_command_env_prefers_data_science_venv_and_prepends_path(tmp_path: Path) -> None:
+    (tmp_path / ".astack").mkdir()
+    (tmp_path / ".astack" / "project.toml").write_text(
+        'schema_version = 1\nprofile = "data-science"\n'
+        'capabilities = ["scientific-review", "scientific-validation"]\n',
+        encoding="utf-8",
+    )
+    assert cli._workflow_command_env(tmp_path) == (sys.executable, None)
+
+    venv_python = tmp_path / ".venv" / "bin" / "python"
+    venv_python.parent.mkdir(parents=True)
+    venv_python.write_text("#!/bin/sh\n", encoding="utf-8")
+    venv_python.chmod(0o755)
+    executable, env = cli._workflow_command_env(tmp_path)
+    assert executable == str(venv_python)
+    assert env is not None
+    assert env["PATH"].split(os.pathsep)[0] == str(venv_python.parent)
+
+    (tmp_path / ".astack" / "project.toml").write_text(
+        'schema_version = 1\nprofile = "general"\n',
+        encoding="utf-8",
+    )
+    assert cli._workflow_command_env(tmp_path) == (sys.executable, None)
+
+
+def test_run_puts_project_venv_on_path_for_named_python_commands(tmp_path: Path) -> None:
+    (tmp_path / ".astack").mkdir()
+    (tmp_path / ".astack" / "project.toml").write_text(
+        'schema_version = 1\nprofile = "data-science"\n'
+        'capabilities = ["scientific-review", "scientific-validation"]\n',
+        encoding="utf-8",
+    )
+    venv_python = tmp_path / ".venv" / "bin" / "python"
+    venv_python.parent.mkdir(parents=True)
+    venv_python.symlink_to(sys.executable)
+    _write_fake_workflow(
+        tmp_path,
+        "import shutil, subprocess, sys\n"
+        "resolved = shutil.which('python')\n"
+        "child = subprocess.run(['python', '-c', 'print(\"from-named-python\")'], "
+        "check=True, capture_output=True, text=True)\n"
+        "print(f'{resolved}|{child.stdout.strip()}')\n",
+    )
+
+    env = {key: value for key, value in os.environ.items() if key != "PATH"}
+    env["PATH"] = ""
+    result = subprocess.run(
+        [sys.executable, "-m", "astack.cli", "run", "validate", "verify"],
+        cwd=tmp_path,
+        env=env,
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+
+    assert result.returncode == 0, result.stderr
+    expected_python = tmp_path.resolve() / ".venv" / "bin" / "python"
+    assert result.stdout.strip() == f"{expected_python}|from-named-python"
+
+
+@pytest.mark.skipif(os.name != "posix", reason="POSIX process-group SIGINT semantics")
+def test_run_delivers_process_group_sigint_to_workflow_without_wrapper_traceback(
+    tmp_path: Path,
+) -> None:
+    import signal
+
+    _write_fake_workflow(
+        tmp_path,
+        "import signal, sys, time\n"
+        "def handle(_signum, _frame):\n"
+        "    print('workflow-handled-sigint', flush=True)\n"
+        "    raise SystemExit(42)\n"
+        "signal.signal(signal.SIGINT, handle)\n"
+        "print('ready', flush=True)\n"
+        "time.sleep(10)\n",
+    )
+
+    proc = subprocess.Popen(
+        [sys.executable, "-m", "astack.cli", "run", "validate", "check"],
+        cwd=tmp_path,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+        start_new_session=True,
+    )
+    try:
+        assert proc.stdout is not None
+        assert proc.stdout.readline().strip() == "ready"
+        os.killpg(proc.pid, signal.SIGINT)
+        stdout, stderr = proc.communicate(timeout=5)
+    finally:
+        if proc.poll() is None:
+            proc.kill()
+            proc.wait()
+
+    assert proc.returncode == 42
+    assert stdout.strip() == "workflow-handled-sigint"
+    assert stderr == ""

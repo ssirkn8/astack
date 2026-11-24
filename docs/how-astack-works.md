@@ -453,6 +453,7 @@ one. Interrupted applies leave a journal and block the next install until it is 
 | `astack change-policy` | Switch profile (`general` / `data-science`) or capabilities |
 | `astack doctor` | Read-only check that a project's tools and skill files are in place |
 | `astack skills` | Verify the pinned skills, or copy them to a folder outside a project |
+| `astack run <subcommand> [args...]` | Run a project workflow command via the enclosing project's `.astack/workflow.py` |
 
 **In a project** (`just <target>`, each a thin wrapper over `.astack/workflow.py`)
 
