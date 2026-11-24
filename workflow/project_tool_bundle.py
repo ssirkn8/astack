@@ -12246,11 +12246,19 @@ def _parser() -> argparse.ArgumentParser:
     # A metavar keeps the hidden compatibility alias out of the command list.
     subparsers = parser.add_subparsers(dest="command", required=True, metavar="COMMAND")
     upgrade_parser = subparsers.add_parser(
-        "upgrade", help="Plan an upgrade to an exact published astack release (dry-run)"
+        "upgrade",
+        help="Plan or apply an upgrade to a published astack release (defaults to latest stable)",
     )
-    upgrade_parser.add_argument("release")
+    upgrade_parser.add_argument(
+        "release",
+        nargs="?",
+        default=None,
+        help="Exact published release tag such as v1.2.1 (defaults to latest stable release)",
+    )
     upgrade_parser.add_argument("--apply", action="store_true")
-    upgrade_parser.add_argument("--approve-plan")
+    upgrade_parser.add_argument(
+        "--approve-plan", help="Exact dry-run plan_digest to apply (implies --apply)"
+    )
     audit_parser = subparsers.add_parser(
         "audit", help="Check workflow conformance, provenance and evidence (just ship-ready)"
     )
@@ -12466,10 +12474,11 @@ def main() -> None:
         except ImportError:
             from astack.release_upgrade import upgrade_release
 
+        # Check `is not None` so `--approve-plan ""` still attempts apply and fails closed.
         result = upgrade_release(
             Path.cwd(),
             args.release,
-            apply=args.apply,
+            apply=bool(args.apply or args.approve_plan is not None),
             approve_plan=args.approve_plan,
         )
         _emit_result(result, Path.cwd(), command="upgrade")

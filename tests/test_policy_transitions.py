@@ -382,3 +382,40 @@ def test_a_malformed_declared_verify_still_blocks_enabling_scientific_validation
     )
 
     assert any("validation.verify" in item for item in plan["conflicts"])
+
+
+def test_change_policy_cli_approve_plan_implies_apply_end_to_end(
+    consumer: Path, monkeypatch, capsys
+) -> None:
+    from astack import cli
+
+    root = consumer
+    base = ["astack", "change-policy", str(root), "--profile", "data-science", "--candidate"]
+    monkeypatch.setattr(sys, "argv", base)
+    cli.main()
+    plan = json.loads(capsys.readouterr().out)
+    assert plan["status"] == "dry-run"
+    digest = plan["plan_digest"]
+
+    for bad_flags in (["--apply"], ["--approve-plan", ""]):
+        monkeypatch.setattr(sys, "argv", [*base, *bad_flags])
+        with pytest.raises(SystemExit) as error:
+            cli.main()
+        assert error.value.code == 1
+        assert "exact conflict-free" in capsys.readouterr().err
+        assert project_policy.project_profile(root) == "general"
+
+    monkeypatch.setattr(sys, "argv", [*base, "--approve-plan", digest])
+    cli.main()
+    assert json.loads(capsys.readouterr().out)["status"] == "applied"
+    assert project_policy.project_profile(root) == "data-science"
+
+    _commit(root)
+    back = ["astack", "change-policy", str(root), "--profile", "general", "--candidate"]
+    monkeypatch.setattr(sys, "argv", back)
+    cli.main()
+    back_digest = json.loads(capsys.readouterr().out)["plan_digest"]
+    monkeypatch.setattr(sys, "argv", [*back, "--apply", "--approve-plan", back_digest])
+    cli.main()
+    assert json.loads(capsys.readouterr().out)["status"] == "applied"
+    assert project_policy.project_profile(root) == "general"

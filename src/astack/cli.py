@@ -275,6 +275,11 @@ def _release_target(args: argparse.Namespace) -> str | None:
     return None if args.release is None else str(args.release)
 
 
+def _apply_requested(args: argparse.Namespace) -> bool:
+    # Check `is not None` so `--approve-plan ""` still attempts apply and fails closed.
+    return bool(args.apply or args.approve_plan is not None)
+
+
 def _emit_result(result: object, cwd: Path, *, command: str) -> None:
     del cwd
     payload = dict(result) if isinstance(result, dict) else {"result": result}
@@ -443,7 +448,9 @@ def _parser() -> argparse.ArgumentParser:
         "--initialize", action="store_true", help="Initialize an empty destination"
     )
     install.add_argument("--apply", action="store_true")
-    install.add_argument("--approve-plan")
+    install.add_argument(
+        "--approve-plan", help="Exact dry-run plan_digest to apply (implies --apply)"
+    )
     install.add_argument(
         "--recover", action="store_true", help="Plan recovery of an interrupted install"
     )
@@ -486,7 +493,9 @@ def _parser() -> argparse.ArgumentParser:
         "--candidate", action="store_true", help="Explicit unpublished development candidate"
     )
     policy.add_argument("--apply", action="store_true")
-    policy.add_argument("--approve-plan")
+    policy.add_argument(
+        "--approve-plan", help="Exact dry-run plan_digest to apply (implies --apply)"
+    )
 
     skills = subparsers.add_parser(
         "skills", help="Verify the pinned skills, or copy them to a folder outside a project"
@@ -538,7 +547,7 @@ def main() -> None:
                 capabilities=capabilities,
                 release=_release_target(args),
                 candidate=args.candidate,
-                apply=args.apply,
+                apply=_apply_requested(args),
                 approve_plan=args.approve_plan,
             ),
             args.target,
@@ -561,9 +570,10 @@ def main() -> None:
         from .installation import install_project, recover_installation
 
         try:
+            effective_apply = _apply_requested(args)
             if args.recover:
                 install_result = recover_installation(
-                    args.target, apply=args.apply, approve_plan=args.approve_plan
+                    args.target, apply=effective_apply, approve_plan=args.approve_plan
                 )
             else:
                 commands = _parse_install_checks(args.check_specs)
@@ -573,7 +583,7 @@ def main() -> None:
                     candidate=args.candidate,
                     commands=commands,
                     initialize=args.initialize,
-                    apply=args.apply,
+                    apply=effective_apply,
                     approve_plan=args.approve_plan,
                 )
         except (ValueError, OSError, RuntimeError) as exc:

@@ -62,23 +62,25 @@ By default, `astack install` targets the current directory (`.`) and installs th
 
 - `--check` splits a command string into argv tokens without a shell (for example `--check "npm test"`). Use `--check-argv` when you need an exact JSON argv array (for example `--check-argv '["npm", "test"]'`). Repeat either flag if you need multiple check commands.
 - `--initialize` initializes Git and installs workflow files into an empty directory without scaffolding a Python starter template.
-- **Dry-run first, always.** `astack install` prints every proposed path, source identity, ownership decision, conflict, and a SHA-256 `plan_digest` without writing anything. Apply by rerunning with the exact same arguments plus `--apply --approve-plan <plan_digest>` using the `plan_digest` printed by the dry run. Any change to files, Git state, checks, or release source invalidates that digest and refuses to apply.
+- **Dry-run first, always.** `astack install` prints every proposed path, source identity, ownership decision, conflict, and a SHA-256 `plan_digest` without writing anything. Apply by rerunning with the exact same arguments plus `--approve-plan <plan_digest>` (which implies `--apply`, and `--apply --approve-plan` remains accepted) using the `plan_digest` printed by the dry run. Any change to files, Git state, checks, or release source invalidates that digest and refuses to apply.
 - Ordinary work in a General project uses only Python's standard library (DVC metadata checks require PyYAML). Because `astack install` adds no `justfile`, run the strict audit with `astack run audit --strict --run-tools`.
 - Maintainers testing unpublished changes against disposable repositories must pass `--candidate` instead of `--release`. Candidate mode records candidate status without claiming a published release.
 
 ## Upgrading and recovery
 
-Upgrade an existing project to an exact published release from inside the project:
+Upgrade an existing project to the latest published stable release (or pass an exact tag such as `vX.Y.Z`) from inside the project:
 
 ```sh
-astack run upgrade vX.Y.Z
+astack run upgrade
 ```
 
-That resolves the exact published release and runs its installer as a dry run, printing a SHA-256 `plan_digest` for the proposed changes. Inspect the plan, then apply with that exact `plan_digest`:
+That resolves the latest published stable release (or the exact tag you pass) and runs its installer as a dry run, printing a SHA-256 `plan_digest` for the proposed changes. Inspect the plan, then apply with that exact `plan_digest` (`--approve-plan` implies `--apply`, and `--apply --approve-plan` remains accepted):
 
 ```sh
-astack run upgrade vX.Y.Z --apply --approve-plan <plan_digest>
+astack run upgrade --approve-plan <plan_digest>
 ```
+
+Projects still on an older vendored `.astack/workflow.py` (such as `v0.1.0`) need an explicit tag and `--apply --approve-plan <plan_digest>` for their first upgrade (`astack run upgrade vX.Y.Z`, then `astack run upgrade vX.Y.Z --apply --approve-plan <plan_digest>`).
 
 Safety rules:
 
@@ -101,7 +103,7 @@ Switch profile or capabilities later from inside your repository (or pass `<dir>
 astack change-policy --profile data-science
 ```
 
-By default, `astack change-policy` targets the current directory (`.`), uses the exact published release matching your installed CLI version (`--release vX.Y.Z` overrides the tag), and enables both `scientific-review` and `scientific-validation` when switching to `data-science` without explicit `--capability` flags. As with `install`, your installed CLI must match that published release commit (or prefix with `uv tool run --from 'git+https://github.com/ssirkn8/astack.git@<verified-release-commit>'`). Apply with `--apply --approve-plan <plan_digest>` using the `plan_digest` printed by the preview.
+By default, `astack change-policy` targets the current directory (`.`), uses the exact published release matching your installed CLI version (`--release vX.Y.Z` overrides the tag), and enables both `scientific-review` and `scientific-validation` when switching to `data-science` without explicit `--capability` flags. As with `install`, your installed CLI must match that published release commit (or prefix with `uv tool run --from 'git+https://github.com/ssirkn8/astack.git@<verified-release-commit>'`). Apply with `--approve-plan <plan_digest>` (which implies `--apply`) using the `plan_digest` printed by the preview.
 
 What `change-policy` does and does not do:
 
