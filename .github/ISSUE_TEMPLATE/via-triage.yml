@@ -1,0 +1,53 @@
+name: Agent triage report
+description: Structured bug report investigated by a coding agent. For hand-written reports use Bug report instead.
+title: "[Bug]: "
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Use this template for bug reports investigated with a coding agent. Keep one problem per issue, and redact secrets, private research data, and local home directory paths before submitting.
+
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened
+      description: Describe the failure in the user's own words.
+    validations:
+      required: true
+
+  - type: textarea
+    id: diagnosis
+    attributes:
+      label: Diagnosis
+      description: Root cause or narrowest finding grounded in logs and source code. Distinguish verified facts from hypotheses.
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps-to-reproduce
+    attributes:
+      label: Steps to reproduce
+      description: Minimal commands or steps to reproduce the issue.
+    validations:
+      required: true
+
+  - type: textarea
+    id: version-and-environment
+    attributes:
+      label: Version and environment
+      description: Include astack version or commit SHA, OS, Python/uv/just versions, and coding agent harness.
+      placeholder: |
+        - astack: v0.1.0 (or commit SHA)
+        - OS: macOS 15
+        - Toolchain: Python 3.12, uv 0.6, just 1.40
+        - Harness: T3 Code
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Relevant logs or output
+      description: Optional redacted command output, logs, or stack traces.
+      render: shell

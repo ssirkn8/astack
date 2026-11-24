@@ -1,0 +1,104 @@
+name: Bug report
+description: Report broken behavior, regressions, crashes, or reliability issues.
+title: "[Bug]: "
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Use this form for broken behavior, regressions, crashes, or reliability issues. Feature requests belong in [Discussions](https://github.com/ssirkn8/astack/discussions/categories/ideas). Please search existing issues first and keep one problem per report.
+
+  - type: checkboxes
+    id: before-submitting
+    attributes:
+      label: Before submitting
+      options:
+        - label: I searched existing issues and did not find a duplicate.
+          required: true
+        - label: I included enough detail to reproduce or investigate this issue.
+          required: true
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      description: Which part of astack is affected?
+      options:
+        - astack CLI
+        - Project runtime (.astack/workflow.py)
+        - Project scaffold / templates
+        - Skills (.agents / .claude / .opencode)
+        - DVC / reproduction
+        - Marimo review notebook
+        - Audit / reports
+        - Docs
+        - Not sure
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps-to-reproduce
+    attributes:
+      label: Steps to reproduce
+      description: Exact commands or steps to trigger the problem.
+      placeholder: |
+        1. Run `...`
+        2. Observe `...`
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected-behavior
+    attributes:
+      label: Expected behavior
+      description: What you expected to happen.
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual-behavior
+    attributes:
+      label: Actual behavior
+      description: What actually happened instead.
+    validations:
+      required: true
+
+  - type: dropdown
+    id: impact
+    attributes:
+      label: Impact
+      description: How severely does this affect your workflow?
+      options:
+        - Blocks work completely
+        - Major degradation or frequent failure
+        - Minor bug or occasional failure
+        - Cosmetic issue
+    validations:
+      required: true
+
+  - type: input
+    id: version
+    attributes:
+      label: Version or commit
+      description: Output of `astack --version`, release tag, or commit SHA.
+      placeholder: v0.1.0 or commit SHA
+
+  - type: input
+    id: environment
+    attributes:
+      label: Environment
+      description: OS, Python/uv/just versions, and coding agent harness.
+      placeholder: macOS 15, Python 3.12, uv 0.6, just 1.40, T3 Code
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs or stack traces
+      description: Paste relevant output or stack traces. Redact secrets and private research data.
+      render: shell
+
+  - type: textarea
+    id: workaround
+    attributes:
+      label: Workaround
+      description: Optional workaround you used to continue working.
