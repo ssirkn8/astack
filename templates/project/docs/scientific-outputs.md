@@ -88,13 +88,7 @@ The summary without `--analysis` assembles project-level outputs across contribu
 reporting. Trace publication claims to actual artifacts, validation, provenance, parameters,
 and limitations. Distinguish planned/blocked outputs from completed outputs.
 
-Upgrading from an earlier astack: the registry key `work_units` is now `analyses`. Rename the
-key; the entries and any recorded confirmations stay valid. The options `output-contract
---work-unit` and `audit --output-scope` are now `--analysis`; the old option names still work.
-Projects created earlier keep their plain `ship-ready:` recipe. To name an analysis with it, copy
-the `ship-ready analysis="":` recipe from a new project's justfile. Single-file
-`[output_contract].path` contracts are no longer read. Move their definitions into this registry
-once, reference stable IDs, and reconfirm the derived definitions. Upgrades never rewrite scientific definitions or invent confirmation.
+Upgrades never rewrite scientific definitions or invent confirmation.
 Projects with no declared capability remain supported.
 
 ## Human reading path
