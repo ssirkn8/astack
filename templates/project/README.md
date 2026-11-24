@@ -93,8 +93,7 @@ This project begins in the `exploratory` stage and does not contain a fake pipel
 become material, declare `[reproduction]` in `.astack/project.toml`:
 
 - DVC projects use `engine = "dvc"`, `component`, and a non-empty project-owned `dvc.yaml`.
-- Non-DVC or explicitly migrated legacy projects use `engine = "command"`, `component`, and a
-  command array.
+- Non-DVC projects use `engine = "command"`, `component`, and a command array.
 
 Both modes also declare `outputs`, the result files or directories the pipeline must write. DVC
 projects default to their `dvc.yaml` outputs. Each run records a SHA-256 digest of every declared

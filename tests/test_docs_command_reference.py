@@ -1,4 +1,4 @@
-"""The explainer's command reference must name every command a user can run."""
+"""The command reference must name every command a user can run."""
 
 from __future__ import annotations
 
@@ -11,15 +11,14 @@ from typing import Any
 
 from astack import cli
 
-EXPLAINER = Path("docs/how-astack-works.md")
+COMMAND_REFERENCE = Path("docs/commands.md")
 # `astack release` releases astack itself. The public export leaves it out, so the public
-# explainer does not document it.
+# command reference does not document it.
 PRIVATE_COMMANDS = {"release"}
 
 
 def _documented() -> str:
-    text = EXPLAINER.read_text(encoding="utf-8")
-    return text[text.index("## 12. Command reference") :]
+    return COMMAND_REFERENCE.read_text(encoding="utf-8")
 
 
 def _subcommands(parser: argparse.ArgumentParser) -> set[str]:
@@ -55,23 +54,23 @@ def test_every_astack_command_is_in_the_reference() -> None:
         for name in _help_listed(cli._parser()) - PRIVATE_COMMANDS
         if f"`astack {name}" not in reference
     }
-    assert not missing, f"Add these astack commands to {EXPLAINER}: {sorted(missing)}"
+    assert not missing, f"Add these astack commands to {COMMAND_REFERENCE}: {sorted(missing)}"
 
 
 def test_every_project_runtime_command_is_in_the_reference() -> None:
     reference = _documented()
-    justfile = Path("templates/project/justfile").read_text(encoding="utf-8")
-    # A command the generated justfile wraps is documented through its `just` target.
-    wrapped = set(re.findall(r"\.astack/workflow\.py ([a-z][a-z-]*)", justfile))
-    named = set(re.findall(r"`python \.astack/workflow\.py ([a-z][a-z-]*)", reference))
-    named |= set(re.findall(r"`([a-z][a-z-]*)`", reference))
-    missing = _help_listed(_runtime_parser()) - wrapped - named
-    assert not missing, f"Add these runtime commands to {EXPLAINER}: {sorted(missing)}"
+    named = set(re.findall(r"`astack run ([a-z][a-z-]*)", reference))
+    missing = _help_listed(_runtime_parser()) - named
+    assert not missing, f"Add these runtime commands to {COMMAND_REFERENCE}: {sorted(missing)}"
 
 
 def test_every_project_just_recipe_is_in_the_reference() -> None:
     justfile = Path("templates/project/justfile").read_text(encoding="utf-8")
     recipes = set(re.findall(r"^([a-z][a-z0-9-]*)\b[^:\n]*:(?!=)", justfile, re.M))
     reference = _documented()
-    missing = {name for name in recipes if not re.search(rf"`{re.escape(name)}[` ]", reference)}
-    assert recipes and not missing, f"Add these just targets to {EXPLAINER}: {sorted(missing)}"
+    missing = {
+        name for name in recipes if not re.search(rf"`(?:just )?{re.escape(name)}[` ]", reference)
+    }
+    assert recipes and not missing, (
+        f"Add these just targets to {COMMAND_REFERENCE}: {sorted(missing)}"
+    )

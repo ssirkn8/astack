@@ -23,7 +23,7 @@ Reconcile only astack-managed workflow files through a dry-run-first, checksum-a
 1. Inspect target Git status and current `.astack/version` and `.astack/manifest.json`.
 2. Require an exact published stable tag, such as `v1.2.1`. Run
    `python .astack/workflow.py upgrade <tag>` without `--apply` from the project.
-   If its older runtime lacks this command, run that release's installer directly:
+   If the local runtime is missing `upgrade`, run that release's installer directly:
    `uv tool run --from git+https://github.com/ssirkn8/astack.git@<tag> astack install . --release <tag>`.
    Both verify published release evidence, resolve the tag to a commit, and run that exact
    commit's `astack install`. Never use main, another moving branch, an arbitrary commit, or the

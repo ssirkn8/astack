@@ -50,16 +50,10 @@ in sorted relative-path order, the path, a null byte, the file's 64-character he
 newline. A symlink to a directory, an unreadable folder, or any other non-regular entry inside the
 tree fails the check instead of being skipped.
 
-The older `sha256-tree-v1:<digest>` is still compared, so a changed directory is still detected,
-but it is reported as a P1 finding that blocks release: its framing (path, null byte, raw file
-bytes, null byte) lets two different directories share a digest when file contents contain null
-bytes. Replace it with the `checksum` command's value.
-
 The standard worktree topology shares only `raw/`. `manual/`, `interim/`, and `processed/` are
 always worktree-local. Before creating a linked worktree, populate and verify the raw snapshot, then
 run `chmod -R a-w data/raw` or apply equivalent read-only permissions to the configured external data
-root. Worktree creation refuses writable shared inputs. Existing nonstandard projects may use an
-explicit legacy layout during migration.
+root. Worktree creation refuses writable shared inputs.
 
 ## Acquisition and reproduction
 
