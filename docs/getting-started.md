@@ -116,11 +116,11 @@ What `change-policy` does and does not do:
 
 ## Agent harnesses and `astack doctor`
 
-Each coding agent discovers skills in its own folder, so astack writes the same managed skill files to each location:
+Each coding-agent harness discovers skills in its own folder, so astack writes the same managed skill files to each location (T3 Code orchestrates these harnesses and uses `.agents/skills/`):
 
 | Harness | Reads skills from | Notes |
 | --- | --- | --- |
-| T3 Code / Codex | `.agents/skills/` | Primary target for PR orchestration skills. |
+| Codex | `.agents/skills/` | Shared discovery directory also used in T3 Code. |
 | Claude Code | `.claude/skills/` | Reads only this directory for skills. |
 | OpenCode | `.opencode/skills/`, `.claude/skills/`, `.agents/skills/` | Discovers all three. |
 | Pi | `.agents/skills/`, plus `.pi/settings.json` | Active after you trust the project. |
