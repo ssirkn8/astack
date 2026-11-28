@@ -1198,3 +1198,261 @@ def test_resolve_latest_release_fails_closed_when_github_api_unavailable(monkeyp
     monkeypatch.setattr(release_upgrade, "_github_json", unavailable)
     with pytest.raises(RuntimeError, match="unavailable"):
         release_upgrade.resolve_latest_release()
+
+
+def test_tutorial_without_topic_lists_available_tutorials(monkeypatch, capsys) -> None:
+    monkeypatch.setattr(sys, "argv", ["astack", "tutorial"])
+
+    cli.main()
+
+    streams = capsys.readouterr()
+    payload = json.loads(streams.out)
+    assert payload["status"] == "available"
+    assert [item["name"] for item in payload["tutorials"]] == ["intro"]
+    assert "astack tutorial intro" in streams.err
+
+
+def test_tutorial_rejects_unknown_topic(monkeypatch) -> None:
+    monkeypatch.setattr(sys, "argv", ["astack", "tutorial", "unknown-topic"])
+    with pytest.raises(SystemExit, match="Unknown tutorial 'unknown-topic'.*intro"):
+        cli.main()
+
+
+def test_tutorial_intro_defaults_target_and_forwards_to_create_tutorial(
+    tmp_path: Path, monkeypatch, capsys
+) -> None:
+    from astack import tutorial
+
+    captured: dict[str, object] = {}
+
+    def fake_create(target: Path, **kwargs: object) -> dict[str, object]:
+        captured.update({"target": target, **kwargs})
+        return {
+            "status": "created",
+            "topic": "intro",
+            "target": str(target),
+            "files": ["TUTORIAL.md"],
+            "raw_inputs": ["data/raw/sites.parquet"],
+            "git": "initialized and committed on main",
+            "next_prompt": "Turn 1 prompt",
+        }
+
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(tutorial, "create_tutorial", fake_create)
+    monkeypatch.setattr(cli, "_enclosing_repository", lambda _target, **_kw: None)
+    monkeypatch.setattr(sys, "argv", ["astack", "tutorial", "intro"])
+
+    cli.main()
+
+    assert captured["target"] == Path("stargazing-spots")
+    assert captured["topic"] == "intro"
+    assert captured["init_git"] is True
+    streams = capsys.readouterr()
+    assert json.loads(streams.out)["topic"] == "intro"
+    assert "astack doctor" in streams.err
+    assert "Turn 1 prompt" in streams.err
+
+
+def test_tutorial_refuses_to_initialize_inside_an_existing_git_repo(
+    tmp_path: Path, monkeypatch
+) -> None:
+    subprocess.run(["git", "init", "-b", "main"], cwd=tmp_path, check=True, capture_output=True)
+    target = tmp_path / "stargazing-spots"
+    monkeypatch.setattr(sys, "argv", ["astack", "tutorial", "intro", str(target)])
+    with pytest.raises(SystemExit, match="refuses to initialize inside existing Git repository"):
+        cli.main()
+    assert not target.exists()
+
+
+def test_tutorial_no_git_skips_enclosing_repo_check(tmp_path: Path, monkeypatch) -> None:
+    from astack import tutorial
+
+    subprocess.run(["git", "init", "-b", "main"], cwd=tmp_path, check=True, capture_output=True)
+    target = tmp_path / "stargazing-spots"
+    captured: dict[str, object] = {}
+
+    def fake_create(path: Path, **kwargs: object) -> dict[str, object]:
+        captured.update({"target": path, **kwargs})
+        return {
+            "status": "created",
+            "topic": "intro",
+            "target": str(path),
+            "files": ["TUTORIAL.md"],
+            "raw_inputs": [],
+            "git": "skipped (--no-git)",
+            "next_prompt": "Turn 1 prompt",
+        }
+
+    monkeypatch.setattr(tutorial, "create_tutorial", fake_create)
+    monkeypatch.setattr(sys, "argv", ["astack", "tutorial", "intro", str(target), "--no-git"])
+
+    cli.main()
+
+    assert captured["target"] == target
+    assert captured["init_git"] is False
+
+
+def test_tutorial_refuses_existing_target_without_modifying_it(tmp_path: Path) -> None:
+    from astack.tutorial import create_tutorial
+
+    existing_empty = tmp_path / "existing-empty"
+    existing_empty.mkdir()
+    with pytest.raises(FileExistsError, match="Target already exists"):
+        create_tutorial(existing_empty, topic="intro", init_git=False)
+    assert existing_empty.is_dir()
+
+    target = tmp_path / "existing"
+    target.mkdir()
+    marker = target / "keep.txt"
+    marker.write_text("existing file\n", encoding="utf-8")
+
+    with pytest.raises(FileExistsError, match="Target already exists"):
+        create_tutorial(target, topic="intro", init_git=False)
+    assert marker.read_text(encoding="utf-8") == "existing file\n"
+
+
+def test_tutorial_expands_tilde_before_enclosing_repo_preflight(
+    tmp_path: Path, monkeypatch
+) -> None:
+    fake_home = tmp_path / "home"
+    fake_home.mkdir()
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    subprocess.run(["git", "init", "-b", "main"], cwd=fake_home, check=True, capture_output=True)
+    monkeypatch.setenv("HOME", str(fake_home))
+    monkeypatch.chdir(outside)
+    monkeypatch.setattr(sys, "argv", ["astack", "tutorial", "intro", "~/stargazing-spots"])
+
+    with pytest.raises(SystemExit, match="refuses to initialize inside existing Git repository"):
+        cli.main()
+    assert not (fake_home / "stargazing-spots").exists()
+
+
+def test_tutorial_declares_independent_uv_workspace_under_parent_glob(tmp_path: Path) -> None:
+    from astack.tutorial import TUTORIALS, _configure_intro_pyproject
+
+    (tmp_path / "pyproject.toml").write_text(
+        '[project]\nname = "parent"\nversion = "0.1.0"\nrequires-python = ">=3.12"\n\n'
+        '[tool.uv.workspace]\nmembers = ["*"]\n',
+        encoding="utf-8",
+    )
+    child = tmp_path / "stargazing-spots"
+    child.mkdir()
+    (child / "pyproject.toml").write_text(
+        '[project]\nname = "stargazing-spots"\nversion = "0.1.0"\n'
+        'requires-python = ">=3.12"\ndependencies = []\n\n'
+        "[tool.pytest.ini_options]\nmarkers = [\n"
+        '  "integration: tests that exercise integration-heavy behavior",\n]\n',
+        encoding="utf-8",
+    )
+    _configure_intro_pyproject(child, TUTORIALS["intro"])
+    configured = (child / "pyproject.toml").read_text(encoding="utf-8")
+    assert "[tool.uv.workspace]" in configured
+
+    # Keep the fast test offline by stripping external dependencies while retaining the workspace.
+    (child / "pyproject.toml").write_text(
+        configured.replace(
+            'dependencies = ["pyarrow>=15", "rasterio>=1.4", "numpy>=2.0"]', "dependencies = []"
+        ),
+        encoding="utf-8",
+    )
+    lock = subprocess.run(
+        ["uv", "lock", "--offline"],
+        cwd=child,
+        env={k: v for k, v in os.environ.items() if k != "VIRTUAL_ENV"},
+        capture_output=True,
+        text=True,
+    )
+    assert lock.returncode == 0, lock.stderr
+    assert (child / "uv.lock").is_file()
+    assert not (tmp_path / "uv.lock").exists()
+
+
+def test_tutorial_rollback_removes_failed_new_target_for_clean_retry(
+    tmp_path: Path, monkeypatch
+) -> None:
+    from astack import tutorial
+
+    def fail_lock(*_args: object, **_kwargs: object) -> None:
+        raise RuntimeError("uv lock failed")
+
+    monkeypatch.setattr(tutorial, "_run_step", fail_lock)
+
+    fresh_target = tmp_path / "fresh-target"
+    with pytest.raises(RuntimeError, match="uv lock failed"):
+        tutorial.create_tutorial(fresh_target, topic="intro", init_git=False)
+    assert not fresh_target.exists()
+
+
+def test_tutorial_cli_prints_git_identity_guidance_when_fallback_used(
+    tmp_path: Path, monkeypatch, capsys
+) -> None:
+    from astack import tutorial
+
+    spaced_target = tmp_path / "my tutorial"
+    monkeypatch.setattr(
+        tutorial,
+        "create_tutorial",
+        lambda target, **_kw: {
+            "status": "created",
+            "topic": "intro",
+            "target": str(target),
+            "files": ["TUTORIAL.md"],
+            "raw_inputs": [],
+            "git": "initialized and committed on main",
+            "git_identity_fallback": True,
+            "next_prompt": "Turn 1 prompt",
+        },
+    )
+    monkeypatch.setattr(cli, "_enclosing_repository", lambda _target, **_kw: None)
+    monkeypatch.setattr(sys, "argv", ["astack", "tutorial", "intro", str(spaced_target)])
+
+    cli.main()
+
+    streams = capsys.readouterr()
+    resolved = spaced_target.resolve()
+    assert f"git -C '{resolved}' config user.name" in streams.err
+    assert f"git -C '{resolved}' config user.email" in streams.err
+    assert f"cd '{resolved}'" in streams.err
+
+
+def test_tutorial_cli_uses_absolute_path_for_dash_target(
+    tmp_path: Path, monkeypatch, capsys
+) -> None:
+    from astack import tutorial
+
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(
+        tutorial,
+        "create_tutorial",
+        lambda target, **_kw: {
+            "status": "created",
+            "topic": "intro",
+            "target": str(target),
+            "files": ["TUTORIAL.md"],
+            "raw_inputs": [],
+            "git": "initialized and committed on main",
+            "git_identity_fallback": False,
+            "next_prompt": "Turn 1 prompt",
+        },
+    )
+    monkeypatch.setattr(cli, "_enclosing_repository", lambda _target, **_kw: None)
+    monkeypatch.setattr(sys, "argv", ["astack", "tutorial", "intro", "--", "-"])
+
+    cli.main()
+
+    streams = capsys.readouterr()
+    assert f"cd {(tmp_path / '-').resolve()}" in streams.err
+    assert "\n  cd -\n" not in streams.err
+
+
+def test_tutorial_md_reflects_no_git_mode() -> None:
+    from astack.tutorial import _render_tutorial_md
+
+    with_git = _render_tutorial_md(init_git=True)
+    without_git = _render_tutorial_md(init_git=False)
+    assert "created the baseline commit" in with_git
+    assert "Skipped Git setup (`--no-git`)" in without_git
+    assert "git init -b main" in without_git
+    assert "chmod u+w" in with_git
+    assert "docs/walkthrough.md" not in with_git

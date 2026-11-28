@@ -11,104 +11,14 @@ from pathlib import Path
 
 import pytest
 from project_tool_test_support import (
-    _git_baseline,
     no_ci_push_base,  # noqa: F401
     project_tool,
 )
 
-from astack.scaffold import create_project
+from astack.tutorial import create_tutorial
 
 # End-to-end reproduction and audit walkthrough: integration tier, matching other repro tests.
 pytestmark = pytest.mark.integration
-
-MAKE_FIXTURES_SCRIPT = '''"""Generate synthetic VIIRS GeoTIFFs and a GeoParquet 1.1 site table."""
-
-from __future__ import annotations
-
-import json
-import struct
-from pathlib import Path
-
-import numpy as np
-import pyarrow as pa
-import pyarrow.parquet as pq
-import rasterio
-from rasterio.transform import from_origin
-
-SITES = [
-    # site_id, name, elevation_m, lon, lat, apr_radiance, may_radiance
-    ("cedar-ridge", "Cedar Ridge", 1820, -118.425, 34.425, 0.40, 0.44),
-    ("pine-saddle", "Pine Saddle", 1650, -118.375, 34.425, 0.62, 0.66),
-    ("granite-knoll", "Granite Knoll", 1490, -118.325, 34.375, 1.10, 1.18),
-    ("hawk-overlook", "Hawk Overlook", 1210, -118.275, 34.375, 2.20, 2.36),
-    ("valley-rim", "Valley Rim", 940, -118.225, 34.325, 4.10, 4.30),
-    ("highway-turnout", "Highway Turnout", 780, -118.175, 34.275, 6.80, 19.60),
-]
-
-
-def main() -> None:
-    viirs_dir = Path("data/raw/viirs_monthly")
-    viirs_dir.mkdir(parents=True, exist_ok=True)
-    transform = from_origin(-118.45, 34.45, 0.05, 0.05)
-
-    for month_name, value_col in (("2026-04.tif", 5), ("2026-05.tif", 6)):
-        grid = np.full((4, 6), 1.5, dtype=np.float32)
-        for row in SITES:
-            r, c = rasterio.transform.rowcol(transform, row[3], row[4])
-            grid[r, c] = np.float32(row[value_col])
-        with rasterio.open(
-            viirs_dir / month_name,
-            "w",
-            driver="GTiff",
-            height=grid.shape[0],
-            width=grid.shape[1],
-            count=1,
-            dtype="float32",
-            crs="EPSG:4326",
-            transform=transform,
-            nodata=-9999.0,
-        ) as dst:
-            dst.write(grid, 1)
-
-    geometries = [struct.pack("<BIdd", 1, 1, row[3], row[4]) for row in SITES]
-    lons = [row[3] for row in SITES]
-    lats = [row[4] for row in SITES]
-    # Omitting `crs` in GeoParquet 1.1 metadata denotes default OGC:CRS84 (WGS 84 lon/lat).
-    geo_metadata = {
-        "version": "1.1.0",
-        "primary_column": "geometry",
-        "columns": {
-            "geometry": {
-                "encoding": "WKB",
-                "geometry_types": ["Point"],
-                "bbox": [min(lons), min(lats), max(lons), max(lats)],
-            }
-        },
-    }
-    schema = pa.schema(
-        [
-            pa.field("site_id", pa.string()),
-            pa.field("name", pa.string()),
-            pa.field("elevation_m", pa.int32()),
-            pa.field("geometry", pa.binary()),
-        ],
-        metadata={b"geo": json.dumps(geo_metadata).encode("utf-8")},
-    )
-    table = pa.table(
-        {
-            "site_id": [row[0] for row in SITES],
-            "name": [row[1] for row in SITES],
-            "elevation_m": [row[2] for row in SITES],
-            "geometry": geometries,
-        },
-        schema=schema,
-    )
-    pq.write_table(table, Path("data/raw/sites.parquet"))
-
-
-if __name__ == "__main__":
-    main()
-'''
 
 ANALYZE_SCRIPT = r'''"""Sample monthly nighttime-light rasters at each stargazing site."""
 
@@ -316,12 +226,6 @@ if __name__ == "__main__":
     sys.exit(main())
 '''
 
-MYPY_OVERRIDES_TOML = """
-[[tool.mypy.overrides]]
-module = ["numpy", "pyarrow", "pyarrow.*", "rasterio", "rasterio.*"]
-ignore_missing_imports = true
-"""
-
 PROJECT_TOML_MATERIAL = """[analysis]
 stage = "material"
 
@@ -493,41 +397,20 @@ def _promote_and_verify(root: Path) -> None:
 
 def test_stargazing_spots_walkthrough_end_to_end(tmp_path: Path) -> None:
     """Verify every guardrail and failure output described in docs/walkthrough.md."""
-    # Match `astack new stargazing-spots --no-dvc`, which enables Marimo by default.
+    # Match `astack tutorial intro`, which sets up data/raw, dependencies, TUTORIAL.md, and Git.
     target = tmp_path / "stargazing-spots"
-    create_project(
-        target,
-        project_name="Stargazing Spots",
-        package_name="stargazing_spots",
-        description="Rank dark-sky viewpoints from synthetic monthly VIIRS radiance tiles",
-        intended_use="Weekend dark-sky map and reproducible pilot report",
-        tools=["marimo"],
-        lock=False,
-    )
+    result = create_tutorial(target, topic="intro")
+    assert result["status"] == "created"
+    assert (target / "TUTORIAL.md").is_file()
     try:
-        pyproject = target / "pyproject.toml"
-        pyproject_text = pyproject.read_text(encoding="utf-8")
-        pyproject_text = pyproject_text.replace(
-            "dependencies = []",
-            'dependencies = ["pyarrow>=15", "rasterio>=1.4", "numpy>=2.0"]',
-        ).replace(
-            '  "integration: tests that exercise integration-heavy behavior",\n]',
-            '  "integration: tests that exercise integration-heavy behavior",\n'
-            '  "verify: fixture-backed verification checks for material analysis",\n]',
-        )
-        pyproject.write_text(pyproject_text + MYPY_OVERRIDES_TOML, encoding="utf-8")
-
-        lock_res = _run_cmd(target, "uv", "lock")
-        assert lock_res.returncode == 0, lock_res.stdout + lock_res.stderr
-        sync_res = _run_cmd(target, "uv", "sync", "--locked")
-        assert sync_res.returncode == 0, sync_res.stdout + sync_res.stderr
-
-        # Generate synthetic VIIRS GeoTIFFs + GeoParquet 1.1 sites and lock data/raw read-only.
-        (target / "scripts").mkdir(exist_ok=True)
-        (target / "scripts/make_fixtures.py").write_text(MAKE_FIXTURES_SCRIPT, encoding="utf-8")
-        gen_res = _run_cmd(target, "uv", "run", "--locked", "python", "scripts/make_fixtures.py")
-        assert gen_res.returncode == 0, gen_res.stdout + gen_res.stderr
-        _chmod_tree(target / "data/raw", writable=False)
+        # Fresh tutorial sandbox passes `just check`, while `just ship-ready` flags the 3
+        # unrecorded files in `data/raw/` until Turn 1 records them in `data/sources.yml`.
+        initial_check = _run_cmd(target, "just", "check")
+        assert initial_check.returncode == 0, initial_check.stdout + initial_check.stderr
+        initial_ship = _run_cmd(target, "just", "ship-ready")
+        assert initial_ship.returncode != 0
+        assert "P1 [provenance]" in initial_ship.stdout
+        assert "raw_files=3" in initial_ship.stdout
 
         viirs_check = _run_wf(target, "checksum", "data/raw/viirs_monthly")
         sites_check = _run_wf(target, "checksum", "data/raw/sites.parquet")
@@ -565,8 +448,8 @@ def test_stargazing_spots_walkthrough_end_to_end(tmp_path: Path) -> None:
         report_path.parent.mkdir(parents=True, exist_ok=True)
         report_path.write_text(REPORT_MD, encoding="utf-8")
 
-        _git_baseline(target)
         subprocess.run(["git", "config", "user.name", "Observer"], cwd=target, check=True)
+        _commit(target, "Complete Turn 1 and Turn 2")
 
         # Unmodified `just check`, `just review-check`, and `just verify` must pass.
         for recipe in ("check", "review-check", "verify"):
