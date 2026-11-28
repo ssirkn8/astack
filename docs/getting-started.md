@@ -1,5 +1,7 @@
 # Getting started
 
+> Want a 10-minute end-to-end example with T3 Code or Claude Code first? Start with the [Walkthrough](walkthrough.md), then return here for installation, upgrades, and lifecycle details.
+
 astack has three moving parts:
 
 | Piece | What it is | Where it lives |
