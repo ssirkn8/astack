@@ -43,8 +43,7 @@ Run it with `just release` (or `astack run validate release`). On a machine with
 ## Local vs. CI Runs
 
 - **Local (`just ship-ready`):** runs `CHECK`, `just integration`, configured capability checks, and the strict audit in one session (writing timing records under gitignored `.cache/validation/`). `software_checks` covers `just check` and `just integration` only. `computational_reproducibility` stays `not-assessed` while `analysis.stage` is `exploratory` and must pass once `analysis.stage` is `material`.
-- **Default PR CI:** runs `just ship-ready` (which runs `VERIFY` only when you declare it) and never runs `just release`.
-- **Local-only data CI (`just ci-check`):** when private inputs cannot leave your machine, never upload restricted data for CI. Set `[ci] mode = "local-only-sources"` in `.astack/project.toml`, mark unavailable entries `availability: local_only` in `data/sources.yml`, and run `just ci-check` in `.github/workflows/checks.yml`. Local strict `just ship-ready` remains required before shipping material results.
+- **Default PR CI (`just ci-check`):** Data Science projects default to `[ci] mode = "local-only-sources"` in `.astack/project.toml` and run `just ci-check` in `.github/workflows/checks.yml` (never `just release`). In this mode, gitignored `data/raw/` snapshots and `storage: in_place` sources default to `local_only` (marked P2 `not-verified-in-ci` when absent in CI), while code checks, integration tests, metadata checks, and checksums on present files still run. Set `availability: ci_available` on any source that must exist in CI, or remove `[ci]` and run `just ship-ready` if every source is available in CI. Local strict `just ship-ready` remains required before shipping material results.
 
 ## Committed-History Privacy
 

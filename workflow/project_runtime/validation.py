@@ -25,6 +25,7 @@ from .common import (
     yaml,
 )
 from .sources import (
+    _has_local_only_sources,
     _spatial_validators,
 )
 
@@ -223,6 +224,23 @@ def _check_structure(root: Path, findings: list[Finding]) -> None:
         validation_workflows = []
         invalid_validation_workflows = []
         unparseable_workflows = []
+        ship_ready_only_workflows = []
+        ci_declaration: Any = None
+        is_data_science = False
+        ci_config_readable = False
+        try:
+            parsed_config = _project_config(root)
+            ci_declaration = parsed_config.get("ci")
+            is_data_science = parsed_config.get("profile") == "data-science"
+            ci_config_readable = True
+        except (OSError, ValueError):
+            pass  # Project configuration validation reports the actual failure.
+        ci_recipe = (
+            ci_config_readable
+            and ci_declaration == {"mode": "local-only-sources"}
+            and justfile.exists()
+            and _ship_ready_runs_strict_audit(justfile.read_text(), ci=True)
+        )
         for path in workflows:
             text = path.read_text(encoding="utf-8")
             parsed = _workflow_steps(text)
@@ -234,22 +252,14 @@ def _check_structure(root: Path, findings: list[Finding]) -> None:
                 continue
             relative = path.relative_to(root).as_posix()
             validation_workflows.append(relative)
-            ci_recipe = False
-            try:
-                ci_declaration = _project_config(root).get("ci")
-            except (OSError, ValueError):
-                pass  # Project configuration validation reports the actual failure.
-            else:
-                ci_recipe = (
-                    ci_declaration == {"mode": "local-only-sources"}
-                    and justfile.exists()
-                    and _ship_ready_runs_strict_audit(justfile.read_text(), ci=True)
-                )
-            if not any(
-                active and (value == "just ship-ready" or (ci_recipe and value == "just ci-check"))
-                for value, active in run_values
-            ):
+            has_ship_ready = any(
+                active and value == "just ship-ready" for value, active in run_values
+            )
+            has_ci_check = any(active and value == "just ci-check" for value, active in run_values)
+            if not (has_ship_ready or (ci_recipe and has_ci_check)):
                 invalid_validation_workflows.append(str(path.relative_to(root)))
+            elif has_ship_ready and not has_ci_check:
+                ship_ready_only_workflows.append(relative)
         if unparseable_workflows:
             findings.append(
                 _finding(
@@ -268,7 +278,8 @@ def _check_structure(root: Path, findings: list[Finding]) -> None:
                     "ci-ship-ready",
                     (
                         "CI has no applicable pull_request or push validation workflow. "
-                        "At least one must run exact `run: just ship-ready`."
+                        "At least one must run exact `run: just ship-ready` "
+                        "(or `run: just ci-check` in local-only mode)."
                     ),
                     ".github/workflows",
                 )
@@ -281,9 +292,35 @@ def _check_structure(root: Path, findings: list[Finding]) -> None:
                     "ci-ship-ready",
                     (
                         "CI validation workflows must contain an active exact "
-                        "`run: just ship-ready` step."
+                        "`run: just ship-ready` (or `run: just ci-check` in local-only mode) step."
                     ),
                     ", ".join(sorted(invalid_validation_workflows)),
+                )
+            )
+        if (
+            ci_config_readable
+            and is_data_science
+            and ci_declaration in (None, {"mode": "local-only-sources"})
+            and ship_ready_only_workflows
+            and _science_applies(root)
+            and _has_local_only_sources(root)
+        ):
+            hint_action = (
+                "Replace `just ship-ready` with `just ci-check` in CI"
+                if ci_declaration == {"mode": "local-only-sources"}
+                else 'Set `[ci] mode = "local-only-sources"` in .astack/project.toml '
+                "and run `just ci-check` in CI"
+            )
+            findings.append(
+                _finding(
+                    "P2",
+                    "workflow",
+                    "ci-local-sources-hint",
+                    (
+                        "CI runs `just ship-ready` while data/sources.yml declares local-only "
+                        f"sources absent in CI. {hint_action} (see docs/checks-and-audit.md)."
+                    ),
+                    ", ".join(sorted(ship_ready_only_workflows)),
                 )
             )
 

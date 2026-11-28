@@ -45,7 +45,7 @@ How tiers behave:
 
 - **Test separation.** Keep slow tests marked `integration` out of `just check`. Run them with `just integration`, and verify every test belongs to exactly one tier with `just test-split`.
 - **`VERIFY` with `scientific-validation`.** Every `data-science` project (and any `general` project with `scientific-validation`) automatically runs declared `verify` commands during `astack run validate check` and strict `just ship-ready`. While `verify` is undeclared, CHECK still succeeds on its own commands while recording `"verify": {"status": "not-run"}`, and the audit emits `verify-undeclared` (P2 during `exploratory`, P1 blocking once `analysis.stage` is `material`). Calling `just verify` directly fails until `verify` is configured.
-- **Default CI stays fast.** Generated GitHub Actions CI runs `just ship-ready` (or `just ci-check` in local-only mode) and never runs expensive `just verify` or `just release` unless you explicitly opt in. Strict `just ship-ready` runs CHECK, integration, configured DVC/Marimo/Quarto/spatial checks, and the audit once in a single validation session, writing timing evidence to `.cache/validation/`.
+- **Default CI stays fast.** Generated Data Science GitHub Actions CI runs `just ci-check` by default (limited CI for gitignored `data/raw/` sources) and never runs expensive `just verify` or `just release` unless you explicitly opt in. Projects where every source is available in CI can run `just ship-ready` instead. Strict `just ship-ready` runs CHECK, integration, configured DVC/Marimo/Quarto/spatial checks, and the audit once in a single validation session, writing timing evidence to `.cache/validation/`.
 - **Maintainer timing budgets.** In the astack repository itself, one validation session enforces repeatable budgets of 90s for `just check`, 480s for `just integration`, and 600s for `just ship-ready`. Use `just validation-benchmark` to compare serial vs. parallel fast-gate timings cleanly in separate processes.
 
 ## What the checks prove and what they don't
@@ -111,33 +111,39 @@ Supported | Concern | Missing evidence | Not applicable | Needs domain review
 
 An audit surfaces evidence gaps and review needs. It never replaces a qualified statistician, methodologist, domain expert, ethics review, or data steward.
 
-## Local-only CI (when data cannot leave your machine)
+## Local-only CI (default for Data Science projects)
 
-When your project uses private or restricted inputs that GitHub Actions cannot access, never upload restricted data just to make CI green. Opt into limited engineering-and-metadata CI instead.
+Because `/data/raw` is gitignored, raw snapshots and `storage: in_place` inputs normally live on your local machine or server rather than in GitHub Actions. Never upload private or restricted data just to make CI green. New Data Science scaffolds enable limited engineering-and-metadata CI by default:
 
-1. Enable local-only mode in `.astack/project.toml`:
+1. `.astack/project.toml` sets local-only mode:
 
 ```toml
 [ci]
 mode = "local-only-sources"
 ```
 
-2. Mark each unavailable source in `data/sources.yml` while keeping all required provenance, checksum, license, and sensitivity fields:
+2. In this mode, gitignored `data/raw/` snapshots and `storage: in_place` sources are treated as `local_only` by default. You can also set `availability: local_only` explicitly on any source, or set `availability: ci_available` if CI must fail when that source is absent. Committed sources outside `data/raw/` (such as `data/manual/`) remain blocking if missing in CI.
 
 ```yaml
-availability: local_only
+availability: local_only # optional for gitignored data/raw/ and storage: in_place
 ```
 
-Sources without `availability` (or marked `ci_available`) remain blocking if missing in CI.
-
-3. Keep your existing strict local `ship-ready` recipe intact (including its optional `analysis=""` parameter) and ensure `justfile` has the limited `ci-check` recipe (new scaffolds already include it):
+3. Keep your existing strict local `ship-ready` recipe intact (including its optional `analysis=""` parameter) and run `just ci-check` in `.github/workflows/checks.yml`:
 
 ```just
 ci-check:
     uv run --locked python .astack/workflow.py audit --format text --run-tools --strict --ci
 ```
 
-Then call `run: just ci-check` as an exact, active step in `.github/workflows/checks.yml`. Both `ship-ready` and `ci-check` must stay plain single-command recipes (shebangs, extra commands, commented steps, or `|| true` are rejected by the audit).
+Both `ship-ready` and `ci-check` must stay plain single-command recipes (shebangs, extra commands, commented steps, or `|| true` are rejected by the audit). If every source in your project is available in CI, remove `[ci]` from `.astack/project.toml` and run `just ship-ready` in `.github/workflows/checks.yml`.
+
+### Migrating an existing Data Science project
+
+Upgrades never overwrite project-owned files (`.astack/project.toml`, `.github/workflows/checks.yml`, `justfile`, or `data/README.md`). To switch an existing Data Science project from `just ship-ready` to limited CI:
+
+1. Add `[ci]` with `mode = "local-only-sources"` to `.astack/project.toml`.
+2. Confirm `justfile` defines the `ci-check` recipe shown above (scaffolds already include it).
+3. Replace `- run: just ship-ready` with `- run: just ci-check` in `.github/workflows/checks.yml`.
 
 **What local-only CI proves and refuses to claim:**
 

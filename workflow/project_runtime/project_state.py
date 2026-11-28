@@ -68,6 +68,8 @@ from .reproduction import (
 from .sources import (
     _check_sources,
     _check_spatial,
+    _is_local_only_source,
+    _resolve_in_place_source,
 )
 from .validation import (
     _check_evidence,
@@ -1132,28 +1134,57 @@ def _apply_ci_limits(root: Path, findings: list[Finding]) -> list[str]:
     sources = data.get("sources", {}) if isinstance(data, dict) else {}
     if not isinstance(sources, dict):
         return []
+    is_data_science = config.get("profile") == "data-science"
     local = {
         str(key)
         for key, value in sources.items()
-        if isinstance(value, dict) and value.get("availability") == "local_only"
+        if isinstance(value, dict)
+        and _is_local_only_source(root, value, infer_defaults=is_data_science)
     }
-    if not local:
+    # Data Science projects default to limited CI from scaffold time, so exploratory projects
+    # may have no local-only sources yet. Material DS and General projects still require one.
+    if not local and (not is_data_science or _analysis_stage(root) == "material"):
         findings.append(
             _finding(
                 "P1",
                 "provenance",
                 "ci-source-declaration",
-                "Limited CI requires at least one explicitly local_only source.",
+                (
+                    "Limited CI requires at least one local-only source (explicit `availability: "
+                    "local_only`, gitignored `data/raw/`, or `storage: in_place`). Switch CI to "
+                    "`just ship-ready` if every source is available in CI."
+                    if is_data_science
+                    else "Limited CI requires at least one explicitly local_only source."
+                ),
                 "data/sources.yml",
             )
         )
         return []
+    undeclared_in_place = (
+        {
+            key
+            for key in local
+            if isinstance(sources.get(key), dict)
+            and sources[key].get("storage") == "in_place"
+            and _resolve_in_place_source(root, sources[key].get("path"))[2]
+        }
+        if is_data_science
+        else set()
+    )
     excluded = []
     for index, finding in enumerate(findings):
-        if (finding.check == "source-missing" and finding.evidence in local) or finding.check in {
-            "run-provenance",
-            "reproduction-unverified",
-        }:
+        unconfigured_external_root = (
+            finding.check == "source-path" and finding.evidence in undeclared_in_place
+        )
+        if (
+            (finding.check == "source-missing" and finding.evidence in local)
+            or unconfigured_external_root
+            or finding.check
+            in {
+                "run-provenance",
+                "reproduction-unverified",
+            }
+        ):
             excluded.append(finding.check + ":" + finding.evidence)
             findings[index] = _finding(
                 "P2",

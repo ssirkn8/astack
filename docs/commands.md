@@ -51,7 +51,7 @@ Generated Data Science projects include these `just` targets.
 | `just release` | Run the declared `[validation] release` tier (`astack run validate release`). |
 | `just audit-json` | Run the project audit with `--run-tools` and emit JSON. |
 | `just ship-ready [<analysis>]` | Run the strict text audit with `--run-tools` (optionally verifying one declared output-contract analysis). |
-| `just ci-check` | Run the explicit limited CI audit (`--run-tools --strict --ci`) for local-only data projects. |
+| `just ci-check` | Run the limited CI audit (`--run-tools --strict --ci`) for local-only data projects (default in Data Science CI). |
 | `just acquire` | Run the declared `[acquisition]` command to stage new raw inputs. |
 | `just reproduce [--promote] [--verify]` | Run the declared pipeline from a clean commit and record output digests (`--promote` saves durable reference, `--verify` requires a match). |
 | `just report-check [reports...]` | Check that report figures and linked numbers match real, current evidence files. |

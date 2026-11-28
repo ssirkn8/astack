@@ -55,6 +55,14 @@ Commit the generated `data/source-verification/<source-id>.json` and point `veri
 
 Routine audits cache digests for unchanged read-only files (`ASTACK_DIGEST_CACHE=off` disables caching). Strict audits (`just ship-ready` and `just release`) always rehash files directly.
 
+### Limited CI for Local Raw Sources
+
+Because `/data/raw` is gitignored, new Data Science projects default to limited CI: `[ci] mode = "local-only-sources"` in `.astack/project.toml` and `just ci-check` in `.github/workflows/checks.yml`.
+
+- In this mode, gitignored `data/raw/` snapshots and `storage: in_place` sources are treated as `local_only` by default. Missing files in CI appear as visible P2 `not-verified-in-ci` findings instead of failing the PR, while any file present in CI is still checksum-verified.
+- Set `availability: ci_available` on a source if CI must fail when it is absent (for example, data fetched in CI or committed under `data/manual/`). You may also declare `availability: local_only` explicitly on any local-only source.
+- Limited CI never marks `computational_reproducibility` or `release_readiness` as `pass`. Run strict local `just ship-ready` on a machine that has the data before shipping.
+
 ## Acquisition vs. Reproduction
 
 - **Acquisition (`just acquire`):** runs `[acquisition] command` from `.astack/project.toml` inside an isolated `$ASTACK_ACQUISITION_DIR`. Requires `data/raw/` to be read-only first, moves newly staged files in as read-only without overwriting existing paths, and leaves original snapshots untouched on failure.

@@ -75,8 +75,10 @@ def test_create_project_is_lean_and_runnable(
     data_readme = (target / "data/README.md").read_text(encoding="utf-8")
     assert "interim/<component>/" in data_readme
     assert "processed/<component>/" in data_readme
+    assert "just ci-check" in data_readme
     project_state = tomllib.loads((target / ".astack/project.toml").read_text(encoding="utf-8"))
     assert project_state["outputs"] == {"layout": "component", "components": []}
+    assert project_state["ci"] == {"mode": "local-only-sources"}
     project_config = (target / ".astack/project.toml").read_text(encoding="utf-8")
     assert "private_history_paths" in project_config
     assert "private_history_safe_paths" in project_config
@@ -88,14 +90,14 @@ def test_create_project_is_lean_and_runnable(
     setup_just = "extractions/setup-just@f8a3cce218d9f83db3a2ecd90e41ac3de6cdfd9b"
     assert setup_just in checks
     assert "fetch-depth: 0" in checks
-    assert "- run: just ship-ready" in checks
-    assert checks.count("- run: just ship-ready") == 1
+    assert "- run: just ci-check" in checks
+    assert checks.count("- run: just ci-check") == 1
     assert "validation_budget.py" not in checks
     assert "- run: uv lock --check" not in checks
     assert "- run: uv sync --locked" not in checks
     assert "ASTACK_AUDIT_BASE_SHA:" in checks
     assert "github.event.before" in checks
-    assert checks.index(setup_just) < checks.index("- run: just ship-ready")
+    assert checks.index(setup_just) < checks.index("- run: just ci-check")
     manifest = json.loads((target / ".astack/manifest.json").read_text(encoding="utf-8"))
     assert manifest["workflow_version"] == scaffold.workflow_version()
     assert manifest["profile"] == "data-science"
@@ -204,7 +206,7 @@ def test_tools_are_opt_in(tmp_path: Path) -> None:
     checks = (target / ".github/workflows/checks.yml").read_text(encoding="utf-8")
     quarto_setup = "quarto-dev/quarto-actions/setup@8a96df13519ee81fd526f2dfca5962811136661b"
     assert quarto_setup in checks
-    assert checks.index(quarto_setup) < checks.index("just ship-ready")
+    assert checks.index(quarto_setup) < checks.index("just ci-check")
 
 
 @pytest.mark.parametrize(

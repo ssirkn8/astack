@@ -28,6 +28,13 @@ share_raw = true
 # A source may stay outside data/raw for size only above this total, in GB (see data/README.md).
 snapshot_limit_gb = 5
 
+# Default CI skips gitignored data/raw/ and storage: in_place sources (marked not-verified-in-ci)
+# while still running code checks, tests, metadata checks, and checksums on present sources.
+# Strict local `just ship-ready` remains required before shipping. Remove [ci] and switch
+# checks.yml to `just ship-ready` if every source is available in CI.
+[ci]
+mode = "local-only-sources"
+
 # Optional committed-history privacy policy. Paths are project-relative. Private roots match
 # descendants, while safe paths are exact exceptions only and never permit a directory prefix.
 # [privacy]
