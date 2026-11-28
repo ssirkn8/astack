@@ -2,9 +2,16 @@
 
 Coding agents move fast, but by default they leave no trail. Raw inputs get edited in place, sources go undocumented, and reported numbers drift from the code that produced them.
 
-astack is a small set of deterministic checks and agent skills for solo developers and small teams building data science and software projects with coding agents, without enterprise bureaucracy. It works in [T3 Code](https://github.com/pingdotgg/t3code) first, and also in Claude Code, Codex, OpenCode, and Pi.
+astack is a small set of deterministic checks and agent skills for solo developers and small teams building data science and software projects with coding agents, without enterprise bureaucracy. It works in [T3 Code](https://github.com/pingdotgg/t3code) first, and also in Claude Code, Codex, OpenCode, and Pi. It pins proven engineering skills from [tstack](https://github.com/t3dotgg/tstack) and [Matt Pocock](https://github.com/mattpocock/skills), then adds immutable raw data, machine-readable source provenance, reproducible pipeline checks, human code sign-off, and audits that never count missing evidence as a pass. Nothing runs in the background.
 
-astack pins proven engineering skills from [tstack](https://github.com/t3dotgg/tstack) and [Matt Pocock](https://github.com/mattpocock/skills), then adds what research projects need: immutable raw data, machine-readable source provenance, reproducible pipeline checks, human code sign-off, and audits that never count missing evidence as a pass. Nothing runs in the background. Every check runs when you or your agent calls it.
+## What changes in your agent loop
+
+| What you ask your agent | Without astack | With astack |
+| --- | --- | --- |
+| "Clean the outliers and run the analysis" | Raw files can get edited in place or read from undocumented local paths. | `data/raw/` stays read-only and hashed in `data/sources.yml`, and clean-tree `just reproduce --promote` records exact input and output digests. |
+| "Write up the findings" | Numbers get pasted into prose and go stale on the next commit. | `ds-report-generation` links every number via JSON pointer, and `just report-check` fails on any mismatch or stale output. |
+| "Try a second model in a parallel worktree" | Parallel threads overwrite shared outputs or duplicate gigabytes of raw data. | `astack run share-raw --apply` shares only read-only `data/raw/` while keeping interim data, evidence, and reports worktree-local. |
+| "Is this ready to merge?" | Agent sees passing unit tests and says you are ready to ship. | `just ship-ready` checks provenance and reproduction freshness, `just review` requires human-only code sign-off, and `full-stop` opens a PR without auto-merging. |
 
 ## Quickstart
 
@@ -20,7 +27,7 @@ just check                     # lockfile, format, lint, types, and fast tests
 just ship-ready                # full strict audit before opening a PR
 ```
 
-Open `my-study` in your agent and start working. To add astack to an existing repository in any language, see [Getting started](docs/getting-started.md#installing-into-an-existing-repository).
+Open `my-study` in T3 Code or Claude Code and start working. Want to see a complete 10-minute session (with real GeoTIFF + GeoParquet fixtures, caught mistakes, and human sign-off)? Follow the [Walkthrough](docs/walkthrough.md). To add astack to an existing repository in any language, see [Getting started](docs/getting-started.md#installing-into-an-existing-repository).
 
 ## The daily loop
 
@@ -63,6 +70,7 @@ Put project-specific rules in your repository's `AGENTS.md`, not inside managed 
 
 **Using astack**
 
+- [Walkthrough](docs/walkthrough.md): 10-minute end-to-end T3 Code and Claude Code session with GeoTIFF + GeoParquet fixtures, caught mistakes, and `just review` sign-off
 - [Getting started](docs/getting-started.md): new projects, existing repos, upgrades, profile transitions, agent setup, and mid-study pivots
 - [Data and reproducibility](docs/data-and-reproducibility.md): raw data immutability, `data/sources.yml`, worktrees, and DVC or command pipelines
 - [Checks and audit](docs/checks-and-audit.md): `CHECK`, `VERIFY`, and `RELEASE` tiers, scientific audits, evidence limits, and local-only CI

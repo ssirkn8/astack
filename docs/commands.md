@@ -1,6 +1,23 @@
 # Command reference
 
-Every public command you can run with the `astack` CLI, inside a generated project's `justfile`, or through `astack run`.
+Every common agent prompt and public command you can run with the `astack` CLI, inside a generated project's `justfile`, or through `astack run`.
+
+## Common agent prompts
+
+Inside T3 Code, Claude Code, Codex, OpenCode, or Pi, state your goal in plain English. `AGENTS.md` and the installed skills map your intent to the right workflow and deterministic checks:
+
+| What you ask your agent | Skill or workflow triggered | Deterministic check behind it |
+| --- | --- | --- |
+| "Stress-test this analysis plan before we code" | `grilling` (`grill-me`) | Surfaces design gaps before implementation |
+| "Turn this design into GitHub issues" | `to-spec` and `to-tickets` | Files `ready-for-agent` issues (or `docs/work-items/` fallback) |
+| "Record this new dataset and baseline a reproducible run" | `AGENTS.md` data and science rules | `astack run checksum`, `data/sources.yml`, and `just reproduce --promote` |
+| "Write a report summarizing the current results" | `ds-report-generation` | `just report-check` (JSON-pointer values and saved figures) |
+| "Audit this repo and file the findings" | `ds-repo-audit` | `just ship-ready` and `astack run file-audit` |
+| "Review sign-off is done. Full stop." | `full-stop` and `sol-loop` | Opens a reviewed PR without merging (`just review` stays human-only) |
+| "Build a clean public export" | `publish-public` | `astack run export-public` (allowlisted, secret-scanned, history-free) |
+| "Upgrade astack to the latest release" | `astack-upgrade` | `astack run upgrade` (dry-run `plan_digest` before any write) |
+
+See the [Walkthrough](walkthrough.md) for a full 10-minute session showing these prompts and checks in action.
 
 ## `astack` CLI
 
