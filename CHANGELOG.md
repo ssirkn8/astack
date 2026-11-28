@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.3.0](https://github.com/ssirkn8/astack/compare/v0.2.0...v0.3.0) (2026-11-28)
+
+
+### Features
+
+* **cli:** add astack tutorial intro command for ready-to-run walkthrough ([#17](https://github.com/ssirkn8/astack/issues/17)) ([1e23135](https://github.com/ssirkn8/astack/commit/1e231352357b3fc067b6ab6ce60527b8d918a008))
+
+
+### Bug Fixes
+
+* **ci:** default data-science CI to limited mode for local raw sources ([#14](https://github.com/ssirkn8/astack/issues/14)) ([6a75c19](https://github.com/ssirkn8/astack/commit/6a75c19576675ac22ddc2e914b01af60b24d5de6))
+* **skills:** verify upgrades before commit without failing strict audit ([#13](https://github.com/ssirkn8/astack/issues/13)) ([d04d023](https://github.com/ssirkn8/astack/commit/d04d0230774686190cfdfb154981289764f1942d))
+
 ## [0.2.0](https://github.com/ssirkn8/astack/compare/v0.1.0...v0.2.0) (2026-11-24)
 
 
