@@ -41,10 +41,18 @@ Reconcile only astack-managed workflow files through a dry-run-first, checksum-a
    `--apply --approve-plan <plan_digest>`. Changed project content, release commit, or managed
    actions invalidate the digest and require a fresh dry-run and approval.
 6. The installer writes the version marker and manifest last, after every other managed file.
-7. After apply, run the project's checks with `python .astack/workflow.py validate check`, then
-   `python .astack/workflow.py audit --run-tools --strict`. Report failures as failures, not a
-   healthy upgrade.
-8. Do not commit, push, modify research code, or change data.
+7. After apply, verify the uncommitted upgrade before handing off:
+   - Run the project's checks with `python .astack/workflow.py validate check`.
+   - Run the target release's doctor check with
+     `uv tool run --from git+https://github.com/ssirkn8/astack.git@<verified-release-commit> astack doctor`
+     using the release commit recorded in the apply result (or `astack doctor` if the installed
+     `astack` CLI already matches `<tag>`).
+   - Do not run `python .astack/workflow.py audit --run-tools --strict` before commit: the strict
+     release audit requires a clean Git worktree and fails on the upgrade's own uncommitted files.
+   - Report any failure as a failure, not a healthy upgrade.
+8. Do not commit, push, modify research code, or change data. Tell the owner to review and commit
+   the upgrade, then run the strict release audit (`just ship-ready`, or
+   `python .astack/workflow.py audit --run-tools --strict` in General projects).
 
 ## Output
 
