@@ -201,3 +201,15 @@ def test_generated_inventory_ships_ds_safeguards_without_the_lifecycle_engine(
         "skills": ["../.opencode/skills"],
         "enableSkillCommands": True,
     }
+
+
+def test_upgrade_skill_separates_post_apply_checks_from_strict_release_audit() -> None:
+    skill = Path(".opencode/skills/astack-upgrade/SKILL.md").read_text(encoding="utf-8")
+    normalized = " ".join(skill.split())
+    assert "python .astack/workflow.py validate check" in normalized
+    assert "astack doctor" in normalized
+    assert (
+        "Do not run `python .astack/workflow.py audit --run-tools --strict` before commit"
+        in normalized
+    )
+    assert "commit the upgrade, then run the strict release audit (`just ship-ready`" in normalized
