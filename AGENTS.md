@@ -37,6 +37,12 @@ Use native Git/T3 worktrees and GitHub issues; `to-spec` and `to-tickets` publis
 repository's issues with the `ready-for-agent` label. Other issue labels: `bug`, `enhancement`,
 `documentation`, `upstream` (blocked outside this repo), and `needs-decision` (the owner must
 decide). Do not recreate a registry, lifecycle state machine, or duplicate upstream orchestration.
+
+When triaging issues in this repository:
+- Verify the root cause and every assumption of a proposed fix against the actual code before posting it.
+- Label issues `needs-decision` (never `ready-for-agent`) while any owner decision is open, and frame options by user impact rather than code internals.
+- Check whether the fix touches project-owned scaffold files, and settle the existing-project migration path before marking `ready-for-agent`.
+- Add `ready-for-agent` only when an agent can implement the issue without guessing.
 When a PR change was verified by looking at it, `pr-visuals` decides whether to attach an image.
 After implementation and after review fixes, before opening or updating a PR, follow
 `.opencode/skills/source-comments/SKILL.md`. Straightforward code may need no new comments.
