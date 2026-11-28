@@ -55,7 +55,7 @@ def _git_environment() -> dict[str, str]:
     return environment
 
 
-def _enclosing_repository(target: Path) -> Path | None:
+def _enclosing_repository(target: Path, *, command: str = "astack new") -> Path | None:
     """Return the work tree that already contains `target`, or None when there is none."""
     existing = target.resolve()
     while not existing.exists():
@@ -82,9 +82,27 @@ def _enclosing_repository(target: Path) -> Path | None:
         detail += f" (Git could not read {markers[0]})"
     # Any other failure (for example dubious ownership) may hide an enclosing repository.
     raise SystemExit(
-        f"astack new could not tell whether {target} is inside a Git repository: "
+        f"{command} could not tell whether {target} is inside a Git repository: "
         f"{detail}. Fix that, or pass --no-git."
     )
+
+
+def _tutorial_git_plan(target: Path, *, no_git: bool) -> bool:
+    """Require a standalone Git repo so tutorial auto-commits cannot touch an enclosing repo."""
+    if no_git:
+        return False
+    if shutil.which("git") is None:
+        raise SystemExit(
+            "astack tutorial runs `git init` and creates an initial commit, "
+            "but git was not found. Install git, or pass --no-git."
+        )
+    enclosing = _enclosing_repository(target, command="astack tutorial")
+    if enclosing is not None:
+        raise SystemExit(
+            f"astack tutorial refuses to initialize inside existing Git repository {enclosing}. "
+            "Pass a directory outside that repository, or pass --no-git."
+        )
+    return True
 
 
 def _git_plan(target: Path, *, no_git: bool) -> tuple[bool, str]:
@@ -503,6 +521,27 @@ def _parser() -> argparse.ArgumentParser:
     skills.add_argument("--dest", type=Path, help="Explicit provider skill discovery directory")
     skills.add_argument("--apply", action="store_true", help="Copy after full ownership preflight")
 
+    tutorial = subparsers.add_parser(
+        "tutorial",
+        help="Create a ready-to-run tutorial sandbox (for example `astack tutorial intro`)",
+    )
+    tutorial.add_argument(
+        "topic",
+        nargs="?",
+        help="Tutorial name (omit to list available tutorials)",
+    )
+    tutorial.add_argument(
+        "target",
+        nargs="?",
+        type=Path,
+        help="Target directory (defaults to the tutorial's folder name)",
+    )
+    tutorial.add_argument(
+        "--no-git",
+        action="store_true",
+        help="Do not initialize a Git repository or create the initial commit",
+    )
+
     run = subparsers.add_parser(
         "run",
         help="Run a project workflow command via .astack/workflow.py",
@@ -604,6 +643,54 @@ def main() -> None:
                 print(f"  Recovery: {check['recovery']}", file=sys.stderr)
         if environment_result.get("status") == "BLOCKED":
             raise SystemExit(1)
+        return
+    if args.command == "tutorial":
+        from .tutorial import TUTORIALS, available_tutorials, create_tutorial
+
+        if args.topic is None:
+            tutorials = available_tutorials()
+            _emit_result(
+                {"status": "available", "tutorials": tutorials},
+                Path.cwd(),
+                command="tutorial",
+            )
+            print("\nAvailable tutorials:", file=sys.stderr)
+            for item in tutorials:
+                print(
+                    f"  astack tutorial {item['name']} [dir]  # {item['summary']}",
+                    file=sys.stderr,
+                )
+            return
+        if args.topic not in TUTORIALS:
+            valid = ", ".join(sorted(TUTORIALS))
+            raise SystemExit(f"Unknown tutorial {args.topic!r}. Available tutorials: {valid}")
+        spec = TUTORIALS[args.topic]
+        raw_target = args.target if args.target is not None else Path(spec.default_dir)
+        target = raw_target.expanduser()
+        init_git = _tutorial_git_plan(target, no_git=args.no_git)
+        result = create_tutorial(
+            target,
+            topic=spec.name,
+            init_git=init_git,
+            git_env=_git_environment(),
+        )
+        _emit_result(result, Path.cwd(), command="tutorial")
+        quoted_target = shlex.quote(str(target.resolve()))
+        print(f"\nTutorial ready at {target} (Git: {result['git']}).", file=sys.stderr)
+        if result.get("git_identity_fallback"):
+            print(
+                "Note: Git user.name or user.email is not configured. Set a repo-local identity "
+                "before your next commit:\n"
+                f'  git -C {quoted_target} config user.name "Your Name" && '
+                f'git -C {quoted_target} config user.email "you@example.com"',
+                file=sys.stderr,
+            )
+        print(f"Next:\n  cd {quoted_target}\n  astack doctor\n  just check", file=sys.stderr)
+        print(
+            f"\nThen open {target} in T3 Code or Claude Code and paste Turn 1 "
+            f"(full steps in TUTORIAL.md):\n  {result['next_prompt']}",
+            file=sys.stderr,
+        )
         return
     if args.command == "new":
         details = _project_details(args)

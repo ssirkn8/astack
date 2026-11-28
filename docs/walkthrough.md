@@ -10,33 +10,23 @@ Because agent sessions are non-deterministic, your agent may choose slightly dif
 
 Requirements: Python 3.12+, [uv](https://docs.astral.sh/uv/), [just](https://just.systems), Git, and `astack` installed (`uv tool install 'git+https://github.com/ssirkn8/astack'`).
 
-Scaffold a project, install your data libraries (`pyarrow`, `rasterio`, `numpy` for GeoParquet and GeoTIFF), and verify that your harness can see the installed skills. This walkthrough passes `--no-dvc` to keep the example to a single command-engine script (omit `--no-dvc` on real multi-stage studies to use the default DVC pipeline):
+Create the ready-to-run `stargazing-spots` tutorial sandbox with one command:
 
 ```sh
-astack new stargazing-spots --no-dvc \
-  --name "Stargazing Spots" \
-  --package stargazing_spots \
-  --description "Rank dark-sky viewpoints from synthetic monthly VIIRS radiance tiles" \
-  --intended-use "Weekend dark-sky map and reproducible pilot report"
-
+astack tutorial intro
 cd stargazing-spots
-uv add pyarrow rasterio numpy
 astack doctor
+just check
 ```
 
-`astack doctor` checks the managed skill mirrors for T3 Code (`.agents/skills/`) and Claude Code (`.claude/skills/`). Both harnesses can read `AGENTS.md` directly (astack never creates a `CLAUDE.md`, though direct `AGENTS.md` loading in Claude Code requires v2.1.277+ and a local or ancestor `CLAUDE.md` can take precedence). Confirm discovery in your session by asking your agent to list its skills and project rules. See [Agent harnesses and `astack doctor`](getting-started.md#agent-harnesses-and-astack-doctor) for details.
-
-Place your raw inputs under `data/raw/` and lock them read-only:
+`astack tutorial intro` (pass an optional directory after `intro` to put it elsewhere) scaffolds the project without DVC so this intro stays to a single command-engine script, installs `pyarrow`, `rasterio`, and `numpy`, generates and locks the synthetic raw inputs read-only under `data/raw/`, writes `TUTORIAL.md` with the prompts below, and makes the initial commit on `main`:
 
 - `data/raw/viirs_monthly/` (two synthetic `EPSG:4326` GeoTIFFs, `2026-04.tif` and `2026-05.tif`, in `nW/cm²/sr`, including a noisy stray-glare spike at one viewpoint in May) to exercise **directory tree hashing** (`sha256-tree-v2:`)
 - `data/raw/sites.parquet` (a **GeoParquet 1.1** table of six viewpoints in default `OGC:CRS84` lon/lat) to exercise **file hashing** (`sha256:`) and vector spatial data
 
-```sh
-chmod -R a-w data/raw
-git add -A && git commit -m "Start stargazing-spots from astack"
-```
+`astack doctor` checks the managed skill mirrors for T3 Code (`.agents/skills/`) and Claude Code (`.claude/skills/`). Both harnesses can read `AGENTS.md` directly (astack never creates a `CLAUDE.md`, though direct `AGENTS.md` loading in Claude Code requires v2.1.277+ and a local or ancestor `CLAUDE.md` can take precedence). Confirm discovery in your session by asking your agent to list its skills and project rules. See [Agent harnesses and `astack doctor`](getting-started.md#agent-harnesses-and-astack-doctor) for details.
 
-If you plan to test the PR handoff in Turn 4, push `main` to a GitHub remote now and create a feature branch (`git checkout -b pilot-analysis`) before starting Turn 1.
+If you plan to test the PR handoff in Turn 4, push `main` to a GitHub remote now and create a feature branch (`git checkout -b pilot-analysis`) before starting Turn 1. (On real multi-stage studies, run `astack new <dir>` without `--no-dvc` to keep the default DVC pipeline.)
 
 ---
 

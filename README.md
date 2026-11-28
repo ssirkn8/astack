@@ -27,7 +27,7 @@ just check                     # lockfile, format, lint, types, and fast tests
 just ship-ready                # full strict audit before opening a PR
 ```
 
-Open `my-study` in T3 Code or Claude Code and start working. Want to see a complete 10-minute session (with real GeoTIFF + GeoParquet fixtures, caught mistakes, and human sign-off)? Follow the [Walkthrough](docs/walkthrough.md). To add astack to an existing repository in any language, see [Getting started](docs/getting-started.md#installing-into-an-existing-repository).
+Open `my-study` in T3 Code or Claude Code and start working. Want to try a complete 10-minute session first (with synthetic GeoTIFF + GeoParquet fixtures, caught mistakes, and human sign-off)? Run `astack tutorial intro` and follow the [Walkthrough](docs/walkthrough.md). To add astack to an existing repository in any language, see [Getting started](docs/getting-started.md#installing-into-an-existing-repository).
 
 ## The daily loop
 
