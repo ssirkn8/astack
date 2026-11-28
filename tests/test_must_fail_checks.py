@@ -70,8 +70,8 @@ def _with_source(target: Path) -> None:
 
 
 def _with_local_only_source(target: Path) -> None:
+    _material(target)
     _write_sources(target, {"table": {**_source_record(target), "availability": "local_only"}})
-    _append_config(target, '\n[ci]\nmode = "local-only-sources"\n')
 
 
 def _material(target: Path) -> None:

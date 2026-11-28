@@ -2348,28 +2348,57 @@ def _apply_ci_limits(root: Path, findings: list[Finding]) -> list[str]:
     sources = data.get("sources", {}) if isinstance(data, dict) else {}
     if not isinstance(sources, dict):
         return []
+    is_data_science = config.get("profile") == "data-science"
     local = {
         str(key)
         for key, value in sources.items()
-        if isinstance(value, dict) and value.get("availability") == "local_only"
+        if isinstance(value, dict)
+        and _is_local_only_source(root, value, infer_defaults=is_data_science)
     }
-    if not local:
+    # Data Science projects default to limited CI from scaffold time, so exploratory projects
+    # may have no local-only sources yet. Material DS and General projects still require one.
+    if not local and (not is_data_science or _analysis_stage(root) == "material"):
         findings.append(
             _finding(
                 "P1",
                 "provenance",
                 "ci-source-declaration",
-                "Limited CI requires at least one explicitly local_only source.",
+                (
+                    "Limited CI requires at least one local-only source (explicit `availability: "
+                    "local_only`, gitignored `data/raw/`, or `storage: in_place`). Switch CI to "
+                    "`just ship-ready` if every source is available in CI."
+                    if is_data_science
+                    else "Limited CI requires at least one explicitly local_only source."
+                ),
                 "data/sources.yml",
             )
         )
         return []
+    undeclared_in_place = (
+        {
+            key
+            for key in local
+            if isinstance(sources.get(key), dict)
+            and sources[key].get("storage") == "in_place"
+            and _resolve_in_place_source(root, sources[key].get("path"))[2]
+        }
+        if is_data_science
+        else set()
+    )
     excluded = []
     for index, finding in enumerate(findings):
-        if (finding.check == "source-missing" and finding.evidence in local) or finding.check in {
-            "run-provenance",
-            "reproduction-unverified",
-        }:
+        unconfigured_external_root = (
+            finding.check == "source-path" and finding.evidence in undeclared_in_place
+        )
+        if (
+            (finding.check == "source-missing" and finding.evidence in local)
+            or unconfigured_external_root
+            or finding.check
+            in {
+                "run-provenance",
+                "reproduction-unverified",
+            }
+        ):
             excluded.append(finding.check + ":" + finding.evidence)
             findings[index] = _finding(
                 "P2",
@@ -2684,6 +2713,57 @@ def _cached_tree_sha256(directory: Path) -> str:
     return digest
 
 
+def _is_gitignored_raw_path(root: Path, path_value: str) -> bool:
+    """True when `path_value` is a safe relative path under `data/raw/` ignored by Git."""
+    text = path_value.strip()
+    if not text or "://" in text or "\x00" in text:
+        return False
+    path = Path(text)
+    if path.is_absolute() or ".." in path.parts:
+        return False
+    parts = path.parts
+    if len(parts) < 2 or parts[:2] != ("data", "raw"):
+        return False
+    # Linked worktrees symlink `data/raw`; Git rejects check-ignore pathspecs beneath a symlink.
+    target = "data/raw" if (root / "data/raw").is_symlink() else path.as_posix()
+    # `git check-ignore` checks `.gitignore` rules without requiring the file on disk (CI).
+    result = _run(["git", "check-ignore", "--quiet", "--", target], cwd=root)
+    return result.returncode == 0
+
+
+def _is_local_only_source(
+    root: Path, value: dict[str, Any], *, infer_defaults: bool = True
+) -> bool:
+    """True when limited CI treats a source as local-only."""
+    availability = value.get("availability")
+    if availability == "local_only":
+        return True
+    if availability == "ci_available" or not infer_defaults:
+        return False
+    if value.get("storage") == "in_place":
+        return True
+    return _is_gitignored_raw_path(root, str(value.get("path") or ""))
+
+
+def _has_local_only_sources(root: Path, *, infer_defaults: bool = True) -> bool:
+    """True when `data/sources.yml` declares at least one local-only source."""
+    if yaml is None:
+        return False
+    sources_path = root / "data/sources.yml"
+    try:
+        data = yaml.safe_load(sources_path.read_text(encoding="utf-8"))
+    except (OSError, ValueError, yaml.YAMLError):
+        return False
+    sources = data.get("sources", {}) if isinstance(data, dict) else {}
+    if not isinstance(sources, dict):
+        return False
+    return any(
+        isinstance(value, dict)
+        and _is_local_only_source(root, value, infer_defaults=infer_defaults)
+        for value in sources.values()
+    )
+
+
 def _local_source_path(root: Path, value: object) -> Path | None:
     text = str(value or "")
     if not text or "://" in text:
@@ -2983,44 +3063,101 @@ def verify_source(root: Path, source_id: str, retrieved: Path) -> dict[str, Any]
     }
 
 
-def _external_root_for(root: Path, name: str) -> Path | None:
-    """Look up an external root in the canonical checkout's local config, or this root's."""
+def _external_root_state(root: Path, name: str) -> tuple[Path | None, str | None]:
+    """Return (resolved_path, config_error). (None, None) means the root is simply undeclared."""
     try:
         canonical = Path(canonical_checkout(root))
     except (OSError, RuntimeError):
         canonical = root
     try:
         found: Path | None = external_root(canonical, name)
-    except (OSError, RuntimeError, ValueError, tomllib.TOMLDecodeError):
-        return None
-    return found
+    except (OSError, RuntimeError, ValueError, tomllib.TOMLDecodeError) as exc:
+        return None, f"external root {name!r} configuration is invalid: {exc}"
+    if found is not None:
+        return found, None
+    # external_root() returns None for both undeclared and invalid (e.g. relative) settings.
+    env_name = EXTERNAL_ROOT_ENV_PREFIX + name.upper()
+    if os.environ.get(env_name):
+        return None, f"external root {name!r} in {env_name} must be an absolute path"
+    local_toml = canonical / ".astack/local.toml"
+    if local_toml.exists():
+        try:
+            local = tomllib.loads(local_toml.read_text(encoding="utf-8"))
+        except (OSError, tomllib.TOMLDecodeError):
+            return None, f"external root {name!r} could not be read from .astack/local.toml"
+        data = local.get("data")
+        if data is not None and not isinstance(data, dict):
+            return None, f"external root {name!r} configuration in .astack/local.toml is invalid"
+        roots = data.get("external_roots") if isinstance(data, dict) else None
+        if roots is not None and not isinstance(roots, dict):
+            return None, f"external root {name!r} configuration in .astack/local.toml is invalid"
+        if isinstance(roots, dict) and name in roots:
+            return None, f"external root {name!r} in .astack/local.toml must be an absolute path"
+    return None, None
+
+
+def _external_root_for(root: Path, name: str) -> Path | None:
+    """Look up an external root in the canonical checkout's local config, or this root's."""
+    return _external_root_state(root, name)[0]
+
+
+def _resolve_in_place_source(root: Path, value: object) -> tuple[Path | None, str, bool]:
+    """Resolve "root:<name>/<relative path>" and flag only genuinely undeclared external roots."""
+    text = str(value or "").strip()
+    usage = "in-place source path must be root:<name>/<relative path>"
+    if not text.startswith(IN_PLACE_PREFIX):
+        return None, usage, False
+    name, _, relative = text[len(IN_PLACE_PREFIX) :].partition("/")
+    if not re.fullmatch(r"[a-z0-9_]+", name) or not relative:
+        # Lowercase letters, digits and underscores map one-to-one to ASTACK_EXTERNAL_ROOT_<NAME>.
+        return None, usage + ", where <name> uses lowercase letters, digits and underscores", False
+    if "\x00" in relative:
+        return None, "in-place source path must not contain a NUL byte", False
+    relative_path = Path(relative)
+    if not relative_path.parts or relative_path.is_absolute() or ".." in relative_path.parts:
+        return None, "in-place source path must not be absolute or traverse upward", False
+    base, config_error = _external_root_state(root, name)
+    if config_error is not None:
+        return None, config_error, False
+    if base is None:
+        return (
+            None,
+            (
+                f"external root {name!r} is not configured on this machine. Set it in "
+                ".astack/local.toml under [data.external_roots]"
+            ),
+            True,
+        )
+    try:
+        base.stat()
+    except FileNotFoundError:
+        pass
+    except OSError as exc:
+        return None, f"external root {name!r} is not accessible: {exc}", False
+    else:
+        if not base.is_dir():
+            return None, f"external root {name!r} must be a directory", False
+    try:
+        candidate = (base / relative_path).resolve(strict=False)
+    except (OSError, RuntimeError) as exc:
+        return None, f"in-place source path is not accessible: {exc}", False
+    if candidate != base and base not in candidate.parents:
+        return None, "in-place source path escapes its external root", False
+    if candidate.is_relative_to(root.resolve()):
+        return None, "an in-place source must live outside the project. Snapshot it instead", False
+    try:
+        candidate.stat()
+    except FileNotFoundError:
+        pass
+    except OSError as exc:
+        return None, f"in-place source path is not accessible: {exc}", False
+    return candidate, "", False
 
 
 def _in_place_source_path(root: Path, value: object) -> tuple[Path | None, str]:
     """Resolve "root:<name>/<relative path>" against this machine's external roots."""
-    text = str(value or "").strip()
-    usage = "in-place source path must be root:<name>/<relative path>"
-    if not text.startswith(IN_PLACE_PREFIX):
-        return None, usage
-    name, _, relative = text[len(IN_PLACE_PREFIX) :].partition("/")
-    if not re.fullmatch(r"[a-z0-9_]+", name) or not relative:
-        # Lowercase letters, digits and underscores map one-to-one to ASTACK_EXTERNAL_ROOT_<NAME>.
-        return None, usage + ", where <name> uses lowercase letters, digits and underscores"
-    relative_path = Path(relative)
-    if relative_path.is_absolute() or ".." in relative_path.parts:
-        return None, "in-place source path must not be absolute or traverse upward"
-    base = _external_root_for(root, name)
-    if base is None:
-        return None, (
-            f"external root {name!r} is not configured on this machine. Set it in "
-            ".astack/local.toml under [data.external_roots]"
-        )
-    candidate = (base / relative_path).resolve(strict=False)
-    if candidate != base and base not in candidate.parents:
-        return None, "in-place source path escapes its external root"
-    if candidate.is_relative_to(root.resolve()):
-        return None, "an in-place source must live outside the project. Snapshot it instead"
-    return candidate, ""
+    candidate, error, _ = _resolve_in_place_source(root, value)
+    return candidate, error
 
 
 def _snapshot_limit_bytes(root: Path) -> tuple[int, str | None]:
@@ -3123,6 +3260,17 @@ def _check_in_place_source(
                 source_id,
             )
         )
+    checksum = _expected_checksum(value.get("raw_checksum"))
+    if checksum is None:
+        findings.append(
+            _finding(
+                "P1",
+                "reproducibility",
+                "source-checksum",
+                "An in-place source requires a valid SHA-256 checksum.",
+                source_id,
+            )
+        )
     source_path, error = _in_place_source_path(root, value.get("path"))
     if source_path is None:
         findings.append(_finding("P1", "provenance", "source-path", error, source_id))
@@ -3133,26 +3281,27 @@ def _check_in_place_source(
                 "P1",
                 "reproducibility",
                 "source-missing",
-                "In-place source is not available on this machine. Mount its drive or fix its "
-                "external root.",
+                "In-place source is not available on this machine. Mount its drive, fix its "
+                'external root, or use limited CI ([ci] mode = "local-only-sources" and '
+                "`just ci-check`; see docs/checks-and-audit.md).",
                 source_id,
             )
         )
         return
-    checksum = _expected_checksum(value.get("raw_checksum"))
-    checksum_error = _in_place_checksum_error(source_path, checksum)
-    if checksum is None or checksum_error:
-        findings.append(
-            _finding(
-                "P1",
-                "reproducibility",
-                "source-checksum",
-                checksum_error or "An in-place source requires a valid SHA-256 checksum.",
-                source_id,
+    if checksum is not None:
+        checksum_error = _in_place_checksum_error(source_path, checksum)
+        if checksum_error:
+            findings.append(
+                _finding(
+                    "P1",
+                    "reproducibility",
+                    "source-checksum",
+                    checksum_error,
+                    source_id,
+                )
             )
-        )
-    else:
-        _check_source_bytes(source_path, source_id, checksum, findings)
+        else:
+            _check_source_bytes(source_path, source_id, checksum, findings)
     if reason == "size":
         total = _total_bytes(source_path)
         if total <= limit:
@@ -3447,6 +3596,16 @@ def _check_sources(root: Path, findings: list[Finding]) -> None:
                         f"{source_id}: {', '.join(unresolved)}",
                     )
                 )
+        if value.get("availability") not in (None, "local_only", "ci_available"):
+            findings.append(
+                _finding(
+                    "P1",
+                    "provenance",
+                    "source-availability",
+                    "Availability must be local_only or ci_available when declared.",
+                    str(source_id),
+                )
+            )
         storage = value.get("storage", "snapshot")
         if storage not in ("snapshot", "in_place"):
             findings.append(
@@ -3472,16 +3631,6 @@ def _check_sources(root: Path, findings: list[Finding]) -> None:
             if value.get("identity") is None and checksum is not None
             else _source_identity(value.get("identity"))
         )
-        if value.get("availability") not in (None, "local_only", "ci_available"):
-            findings.append(
-                _finding(
-                    "P1",
-                    "provenance",
-                    "source-availability",
-                    "Availability must be local_only or ci_available when declared.",
-                    str(source_id),
-                )
-            )
         identity_value = value.get("identity")
         identity_known = (
             isinstance(identity_value, dict)
@@ -3512,12 +3661,21 @@ def _check_sources(root: Path, findings: list[Finding]) -> None:
                 )
             )
         elif source_path is not None and not source_path.exists():
+            message = "Recorded local source path does not exist."
+            if value.get("availability") != "ci_available" and _is_gitignored_raw_path(
+                root, path_value
+            ):
+                message = (
+                    "Recorded local source path does not exist. In CI, gitignored data/raw/ "
+                    'snapshots require limited CI ([ci] mode = "local-only-sources" and '
+                    "`just ci-check`; see docs/checks-and-audit.md)."
+                )
             findings.append(
                 _finding(
                     "P1",
                     "reproducibility",
                     "source-missing",
-                    "Recorded local source path does not exist.",
+                    message,
                     str(source_id),
                 )
             )
@@ -4011,6 +4169,23 @@ def _check_structure(root: Path, findings: list[Finding]) -> None:
         validation_workflows = []
         invalid_validation_workflows = []
         unparseable_workflows = []
+        ship_ready_only_workflows = []
+        ci_declaration: Any = None
+        is_data_science = False
+        ci_config_readable = False
+        try:
+            parsed_config = _project_config(root)
+            ci_declaration = parsed_config.get("ci")
+            is_data_science = parsed_config.get("profile") == "data-science"
+            ci_config_readable = True
+        except (OSError, ValueError):
+            pass  # Project configuration validation reports the actual failure.
+        ci_recipe = (
+            ci_config_readable
+            and ci_declaration == {"mode": "local-only-sources"}
+            and justfile.exists()
+            and _ship_ready_runs_strict_audit(justfile.read_text(), ci=True)
+        )
         for path in workflows:
             text = path.read_text(encoding="utf-8")
             parsed = _workflow_steps(text)
@@ -4022,22 +4197,14 @@ def _check_structure(root: Path, findings: list[Finding]) -> None:
                 continue
             relative = path.relative_to(root).as_posix()
             validation_workflows.append(relative)
-            ci_recipe = False
-            try:
-                ci_declaration = _project_config(root).get("ci")
-            except (OSError, ValueError):
-                pass  # Project configuration validation reports the actual failure.
-            else:
-                ci_recipe = (
-                    ci_declaration == {"mode": "local-only-sources"}
-                    and justfile.exists()
-                    and _ship_ready_runs_strict_audit(justfile.read_text(), ci=True)
-                )
-            if not any(
-                active and (value == "just ship-ready" or (ci_recipe and value == "just ci-check"))
-                for value, active in run_values
-            ):
+            has_ship_ready = any(
+                active and value == "just ship-ready" for value, active in run_values
+            )
+            has_ci_check = any(active and value == "just ci-check" for value, active in run_values)
+            if not (has_ship_ready or (ci_recipe and has_ci_check)):
                 invalid_validation_workflows.append(str(path.relative_to(root)))
+            elif has_ship_ready and not has_ci_check:
+                ship_ready_only_workflows.append(relative)
         if unparseable_workflows:
             findings.append(
                 _finding(
@@ -4056,7 +4223,8 @@ def _check_structure(root: Path, findings: list[Finding]) -> None:
                     "ci-ship-ready",
                     (
                         "CI has no applicable pull_request or push validation workflow. "
-                        "At least one must run exact `run: just ship-ready`."
+                        "At least one must run exact `run: just ship-ready` "
+                        "(or `run: just ci-check` in local-only mode)."
                     ),
                     ".github/workflows",
                 )
@@ -4069,9 +4237,35 @@ def _check_structure(root: Path, findings: list[Finding]) -> None:
                     "ci-ship-ready",
                     (
                         "CI validation workflows must contain an active exact "
-                        "`run: just ship-ready` step."
+                        "`run: just ship-ready` (or `run: just ci-check` in local-only mode) step."
                     ),
                     ", ".join(sorted(invalid_validation_workflows)),
+                )
+            )
+        if (
+            ci_config_readable
+            and is_data_science
+            and ci_declaration in (None, {"mode": "local-only-sources"})
+            and ship_ready_only_workflows
+            and _science_applies(root)
+            and _has_local_only_sources(root)
+        ):
+            hint_action = (
+                "Replace `just ship-ready` with `just ci-check` in CI"
+                if ci_declaration == {"mode": "local-only-sources"}
+                else 'Set `[ci] mode = "local-only-sources"` in .astack/project.toml '
+                "and run `just ci-check` in CI"
+            )
+            findings.append(
+                _finding(
+                    "P2",
+                    "workflow",
+                    "ci-local-sources-hint",
+                    (
+                        "CI runs `just ship-ready` while data/sources.yml declares local-only "
+                        f"sources absent in CI. {hint_action} (see docs/checks-and-audit.md)."
+                    ),
+                    ", ".join(sorted(ship_ready_only_workflows)),
                 )
             )
 
